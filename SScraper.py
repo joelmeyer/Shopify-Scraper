@@ -12,7 +12,7 @@ from logging.handlers import TimedRotatingFileHandler
 
 URL_PATH = 'products.json?limit=200&page=1'
 SLEEP_TIME = 300  # Default sleep time in seconds
-DB_PATH = 'products.db'
+DB_PATH = 'data/products.db'
 
 # Setup logging
 LOG_DIR = 'logs'
@@ -268,6 +268,8 @@ def Main(url):
     init_db()
     # Load product availability from DB for this input_url
     product_availability = load_product_availability(url)
+    init_product_count = len(product_availability)
+    logger.debug(f'{init_product_count} products loaded from DB for {url}')
     # Initial population of product_availability from getProducts (for new products)
     #current_products, _ = getProducts(url)
     #print(f'[Main][Thread-{threading.get_ident()}][DEBUG] Returned {len(current_products)} products')
@@ -342,7 +344,7 @@ def Main(url):
                 logger.debug(f'New product detected: {product["title"]} ({handle})')
                 new_products.append(id_val)
                 # Only Send a webhook notification if DB has been initialized
-                if len(product_availability) > 0:
+                if init_product_count > 0:
                     send_webhook_notification(wh_link, product, url, 'new')
             # Update the tracked availability in memory and DB
             product_availability[id_val] = available
@@ -355,10 +357,10 @@ def Main(url):
         time.sleep(SLEEP_TIME)
 
 logger.info('SScraper 1.0')
-choice = input('Enter any key to initialize scraper$* (Press \'Q\' to quit) ')
-choice = (choice.lower())
-if choice == ('q'):
-    exit()
+#choice = input('Enter any key to initialize scraper$* (Press \'Q\' to quit) ')
+#choice = (choice.lower())
+#if choice == ('q'):
+#    exit()
      
 # Grab links from text file to initialize threads.
 urls = []

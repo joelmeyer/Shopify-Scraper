@@ -10,5 +10,6 @@ COPY . .
 
 # Create logs directory for logging
 RUN mkdir -p logs
+RUN mkdir -p data
 
 CMD ["python", "SScraper.py"]
