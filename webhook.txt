@@ -1,1 +1,1 @@
-https://discordapp.com/api/webhooks/EXAMPLE
+https://discord.com/api/webhooks/1390702289592778762/QkIDTlN7pi54LgI-XZjbAldeMQ6AEUuiFg1ltS8bN_dpnUcTPhUl6An9qfmwF7znfLRu
