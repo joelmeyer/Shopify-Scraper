@@ -9,10 +9,17 @@ import sqlite3
 import logging
 import os
 from logging.handlers import TimedRotatingFileHandler
+from dotenv import load_dotenv
+
+load_dotenv()
 
 URL_PATH = 'products.json?limit=200&page=1'
 SLEEP_TIME = 300  # Default sleep time in seconds
 DB_PATH = 'data/products.db'
+
+SHOPIFY_URLS = os.getenv('SHOPIFY_URLS', '').split(',')
+PROXIES = [p for p in os.getenv('PROXIES', '').split(',') if p]
+WEBHOOKS = os.getenv('WEBHOOKS', '').split(',')
 
 # Setup logging
 LOG_DIR = 'logs'
@@ -31,13 +38,8 @@ logger.addHandler(console_handler)
 
 def getProxies():
     logger.debug('Entering getProxies')
-    # Grabs proxies from text file.
-    proxy = []
-    proxy_txt = open('proxies.txt', 'r')
-    for proxies in proxy_txt:
-        proxies = proxies.strip('\n')
-        proxy.append(proxies)
-    proxy_txt.close()
+    # Use proxies from env
+    proxy = PROXIES.copy()
     logger.debug(f'Loaded {len(proxy)} proxies')
     return proxy
     
@@ -231,36 +233,37 @@ def load_product_availability(input_url):
     return {id_: bool(available) for id_, available in rows}
 
 def update_product_in_db(id_val, handle, title, available, product, url):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    published_at = str(product.get('published_at') or '')
-    created_at = str(product.get('created_at') or '')
-    updated_at = str(product.get('updated_at') or '')
-    vendor = product.get('vendor')
-    product_url = f"{url}products/{handle}"
-    variants = product.get('variants', [])
-    price = variants[0].get('price', "0.00") if variants else "0.00"
-    original_json = json.dumps(product)
-    input_url = url
-    alcohol_type = get_alcohol_type(product)
-    c.execute('''INSERT INTO products (id, handle, title, available, last_seen, published_at, created_at, updated_at, vendor, url, price, original_json, input_url, alcohol_type)
-                 VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                 ON CONFLICT(id, input_url) DO UPDATE SET
-                    handle=excluded.handle,
-                    title=excluded.title,
-                    available=excluded.available,
-                    last_seen=CURRENT_TIMESTAMP,
-                    published_at=excluded.published_at,
-                    created_at=excluded.created_at,
-                    updated_at=excluded.updated_at,
-                    vendor=excluded.vendor,
-                    url=excluded.url,
-                    price=excluded.price,
-                    original_json=excluded.original_json,
-                    alcohol_type=excluded.alcohol_type''',
-              (id_val, handle, title, int(available), published_at, created_at, updated_at, vendor, product_url, price, original_json, input_url, alcohol_type))
-    conn.commit()
-    conn.close()
+    with db_lock:
+        conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+        c = conn.cursor()
+        published_at = str(product.get('published_at') or '')
+        created_at = str(product.get('created_at') or '')
+        updated_at = str(product.get('updated_at') or '')
+        vendor = product.get('vendor')
+        product_url = f"{url}products/{handle}"
+        variants = product.get('variants', [])
+        price = variants[0].get('price', "0.00") if variants else "0.00"
+        original_json = json.dumps(product)
+        input_url = url
+        alcohol_type = get_alcohol_type(product)
+        c.execute('''INSERT INTO products (id, handle, title, available, last_seen, published_at, created_at, updated_at, vendor, url, price, original_json, input_url, alcohol_type)
+                     VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     ON CONFLICT(id, input_url) DO UPDATE SET
+                        handle=excluded.handle,
+                        title=excluded.title,
+                        available=excluded.available,
+                        last_seen=CURRENT_TIMESTAMP,
+                        published_at=excluded.published_at,
+                        created_at=excluded.created_at,
+                        updated_at=excluded.updated_at,
+                        vendor=excluded.vendor,
+                        url=excluded.url,
+                        price=excluded.price,
+                        original_json=excluded.original_json,
+                        alcohol_type=excluded.alcohol_type''',
+                  (id_val, handle, title, int(available), published_at, created_at, updated_at, vendor, product_url, price, original_json, input_url, alcohol_type))
+        conn.commit()
+        conn.close()
 
 def Main(url):
     logger.debug(f'Entering Main for url: {url}')
@@ -276,86 +279,95 @@ def Main(url):
     logger.debug(f'DB Returned {len(product_availability)} products availablity')
     proxies = getProxies()
 
-    wh_file = open('webhook.txt', 'r')
-    wh_link = wh_file.readline().strip()
-    wh_file.close()
-    logger.debug('Webhook loaded')    
+    wh_link = WEBHOOKS[0]  # Default to first webhook
+    logger.debug('Webhook loaded')   
+    loop_exceptions = 0 
 
     while True:
-        # Monitors website for new products
-        if len(proxies) > 0:
-            # Grabs a random proxy from proxy list
-            try:
-                x = randint(0, (len(proxies) - 1))
-                proxy = proxies[x]
-                proxy_dict = {'http': ('http://{}'.format(proxy)), 'https': ('https://{}'.format(proxy))}
-                logger.debug(f'Using proxy: {proxy}')
-            except Exception as e:
-                logger.error(f'No proxies available. Exception: {e}')
-                pass
-            try:
-                url_1 = (url + URL_PATH)
-                headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.131 Safari/537.36'}
-                logger.debug('Requesting products with proxy')
-                webpage = requests.get(url_1, headers=headers, proxies=proxy_dict)
-                products = json.loads((webpage.text))['products']
-                logger.debug('Products fetched with proxy')
-            except Exception as e:
-                logger.error(f'Proxies banned. Sleeping for 3 minutes... Exception: {e}')
-                time.sleep(180)
-                continue
-        else:
-            try:
-                url_1 = (url + URL_PATH)
-                headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.131 Safari/537.36'}
-                logger.debug('Requesting products with localhost')
-                webpage = requests.get(url_1, headers=headers)
-                products = json.loads((webpage.text))['products']
-                logger.debug(f'{len(products)} Products fetched with localhost')
-            except Exception as e:
-                logger.error(f'Local host banned. Sleeping for 3 minutes... Exception: {e}')
-                time.sleep(180)
-                continue
+        try:
+            # Monitors website for new products
+            if len(proxies) > 0:
+                # Grabs a random proxy from proxy list
+                try:
+                    x = randint(0, (len(proxies) - 1))
+                    proxy = proxies[x]
+                    proxy_dict = {'http': ('http://{}'.format(proxy)), 'https': ('https://{}'.format(proxy))}
+                    logger.debug(f'Using proxy: {proxy}')
+                except Exception as e:
+                    logger.error(f'No proxies available. Exception: {e}')
+                    pass
+                try:
+                    url_1 = (url + URL_PATH)
+                    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.131 Safari/537.36'}
+                    logger.debug('Requesting products with proxy')
+                    webpage = requests.get(url_1, headers=headers, proxies=proxy_dict)
+                    products = json.loads((webpage.text))['products']
+                    logger.debug('Products fetched with proxy')
+                except Exception as e:
+                    logger.error(f'Proxies banned. Sleeping for 3 minutes... Exception: {e}')
+                    time.sleep(180)
+                    continue
+            else:
+                try:
+                    url_1 = (url + URL_PATH)
+                    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.131 Safari/537.36'}
+                    logger.debug('Requesting products with localhost')
+                    webpage = requests.get(url_1, headers=headers)
+                    products = json.loads((webpage.text))['products']
+                    logger.debug(f'{len(products)} Products fetched with localhost')
+                except Exception as e:
+                    logger.error(f'Local host banned. Sleeping for 3 minutes... Exception: {e}')
+                    time.sleep(180)
+                    continue
 
-        # Filter products using is_interesting before tracking for availability and new product detection in Main.
-        interesting_products = [p for p in products if is_interesting(p)[0]]
-        new_products = []
-        logger.debug(f'{len(interesting_products)} interesting products fetched with localhost')
-        # --- Check for product availability changes ---
-        for product in interesting_products:
-            id_val = product.get('id')
-            handle = product.get('handle', '')
-            title = product.get('title', '')
+            # Filter products using is_interesting before tracking for availability and new product detection in Main.
+            interesting_products = [p for p in products if is_interesting(p)[0]]
+            new_products = []
+            logger.debug(f'{len(interesting_products)} interesting products fetched with localhost')
+            # --- Check for product availability changes ---
+            for product in interesting_products:
+                id_val = product.get('id')
+                handle = product.get('handle', '')
+                title = product.get('title', '')
+                
+                # If variants exist, check the first one for availability, else False
+                available = False
+                if product.get('variants') and len(product['variants']) > 0:
+                    available = product['variants'][0].get('available', False)
+                prev_available = product_availability.get(id_val)
+                if prev_available is not None and not prev_available and available:
+                    logger.debug(f'Product became available: {product["title"]} ({handle})')
+                    new_products.append(id_val)
+                    send_webhook_notification(wh_link, product, url, 'available')
+                elif prev_available is not None and prev_available and not available:
+                    logger.debug(f'Product became UNAVAILABLE: {product["title"]} ({handle})')
+                    new_products.append(id_val)
+                    send_webhook_notification(wh_link, product, url, 'unavailable')
+                elif prev_available is None:
+                    logger.debug(f'New product detected: {product["title"]} ({handle})')
+                    new_products.append(id_val)
+                    # Only Send a webhook notification if DB has been initialized
+                    if init_product_count > 0:
+                        send_webhook_notification(wh_link, product, url, 'new')
+                # Update the tracked availability in memory and DB
+                product_availability[id_val] = available
+                update_product_in_db(id_val, handle, title, available, product, url)
+            # --- End availability check ---
+
             
-            # If variants exist, check the first one for availability, else False
-            available = False
-            if product.get('variants') and len(product['variants']) > 0:
-                available = product['variants'][0].get('available', False)
-            prev_available = product_availability.get(id_val)
-            if prev_available is not None and not prev_available and available:
-                logger.debug(f'Product became available: {product["title"]} ({handle})')
-                new_products.append(id_val)
-                send_webhook_notification(wh_link, product, url, 'available')
-            elif prev_available is not None and prev_available and not available:
-                logger.debug(f'Product became UNAVAILABLE: {product["title"]} ({handle})')
-                new_products.append(id_val)
-                send_webhook_notification(wh_link, product, url, 'unavailable')
-            elif prev_available is None:
-                logger.debug(f'New product detected: {product["title"]} ({handle})')
-                new_products.append(id_val)
-                # Only Send a webhook notification if DB has been initialized
-                if init_product_count > 0:
-                    send_webhook_notification(wh_link, product, url, 'new')
-            # Update the tracked availability in memory and DB
-            product_availability[id_val] = available
-            update_product_in_db(id_val, handle, title, available, product, url)
-        # --- End availability check ---
-
-        
-        logger.debug(f'Scraping target$* {url} new/changed products: {len(new_products)}')
-        logger.debug(f'sleeping for {SLEEP_TIME} seconds')
-        time.sleep(SLEEP_TIME)
-
+            logger.debug(f'Scraping target$* {url} new/changed products: {len(new_products)}')
+            logger.debug(f'sleeping for {SLEEP_TIME} seconds')
+            time.sleep(SLEEP_TIME)
+            loop_exceptions = 0  # Reset exception counter after successful iteration
+        except Exception as e:
+            if loop_exceptions > 5:
+                logger.error(f'Main loop has encountered too many exceptions ({loop_exceptions}). Exiting...')
+                break
+            logger.error(f'Error in Main loop: {e}')
+            logger.debug('Sleeping for 5 seconds before retrying...')
+            time.sleep(5)
+            loop_exceptions += 1
+            continue
 logger.info('SScraper 1.0')
 #choice = input('Enter any key to initialize scraper$* (Press \'Q\' to quit) ')
 #choice = (choice.lower())
@@ -363,13 +375,7 @@ logger.info('SScraper 1.0')
 #    exit()
      
 # Grab links from text file to initialize threads.
-urls = []
-shopify_links = open('shopify_links.txt', 'r')
-for slinks in shopify_links:
-    slinks = slinks.strip('\n')
-    urls.append(slinks)
-
-shopify_links.close()
+urls = [u.strip() for u in SHOPIFY_URLS if u.strip()]
 
 # Initializes threads to monitor multiple websites at once.
 for x in range(len(urls)):
@@ -382,3 +388,5 @@ for x in range(len(urls)):
     #product_threads.start()
     main_threads.start()
     logger.debug(f'{main_threads.name} initialized')
+
+db_lock = threading.Lock()
