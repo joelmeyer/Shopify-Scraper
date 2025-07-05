@@ -1,4 +1,5 @@
 #RENAME to .env and put your own values
 SHOPIFY_URLS=https://www.example.com/,https://www.example2.com/
 PROXIES=
-WEBHOOKS=https://discord.com/api/webhooks/EXAMPLE
+NOTIFY_WEBHOOK=https://discord.com/api/webhooks/EXAMPLE
+ERROR_WEBHOOK=https://discord.com/api/webhooks/EXAMPLE

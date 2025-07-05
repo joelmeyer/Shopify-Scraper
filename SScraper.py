@@ -19,7 +19,8 @@ DB_PATH = 'data/products.db'
 
 SHOPIFY_URLS = os.getenv('SHOPIFY_URLS', '').split(',')
 PROXIES = [p for p in os.getenv('PROXIES', '').split(',') if p]
-WEBHOOKS = os.getenv('WEBHOOKS', '').split(',')
+NOTIFY_WEBHOOK = os.getenv('NOTIFY_WEBHOOK', '')
+ERROR_WEBHOOK = os.getenv('ERROR_WEBHOOK', '')
 
 # Setup logging
 LOG_DIR = 'logs'
@@ -150,7 +151,27 @@ def get_alcohol_type(product):
         return 'RTD/Cocktail'
     return 'Other'
 
-def send_webhook_notification(wh_link, product, url, event_type):
+def send_webhook(webhook_type, content=None, embed=None):
+    if webhook_type == 'notify':
+        wh_url = NOTIFY_WEBHOOK
+    elif webhook_type == 'error':
+        wh_url = ERROR_WEBHOOK
+    else:
+        logger.error(f'Unknown webhook type: {webhook_type}')
+        return
+    if not wh_url:
+        logger.error(f'Webhook URL for type {webhook_type} is not set.')
+        return
+    try:
+        hook = Webhook(wh_url)
+        if embed:
+            hook.send(embed=embed)
+        elif content:
+            hook.send(content)
+    except Exception as e:
+        logger.error(f'Error sending {webhook_type} webhook: {e}')
+
+def send_webhook_notification(product, url, event_type):
     """
     Send a Discord webhook notification for product events.
     event_type: 'available', 'unavailable', or 'new'
@@ -184,7 +205,6 @@ def send_webhook_notification(wh_link, product, url, event_type):
         description = '***Product update***'
         color = 0xcccccc
 
-    hook = Webhook(wh_link)
     embed = Embed(description=description, color=color, timestamp='now')
     embed.add_field(name='Product Name', value=title)
     embed.add_field(name='Product Link', value=link)
@@ -197,9 +217,12 @@ def send_webhook_notification(wh_link, product, url, event_type):
     embed.set_author(name='Shopify Crawler', icon_url='https://pbs.twimg.com/profile_images/1122559367046410242/6pzYlpWd_400x400.jpg')
     try:
         logger.debug(f'Sending {event_type} webhook notification')
-        hook.send(embed=embed)
+        send_webhook('notify', embed=embed)
     except Exception as e:
         logger.error(f'Error sending {event_type} webhook: {e}')
+
+def send_error_webhook(message):
+    send_webhook('error', content=message)
 
 def init_db():
     conn = sqlite3.connect(DB_PATH)
@@ -279,7 +302,6 @@ def Main(url):
     logger.debug(f'DB Returned {len(product_availability)} products availablity')
     proxies = getProxies()
 
-    wh_link = WEBHOOKS[0]  # Default to first webhook
     logger.debug('Webhook loaded')   
     loop_exceptions = 0 
 
@@ -338,17 +360,17 @@ def Main(url):
                 if prev_available is not None and not prev_available and available:
                     logger.debug(f'Product became available: {product["title"]} ({handle})')
                     new_products.append(id_val)
-                    send_webhook_notification(wh_link, product, url, 'available')
+                    send_webhook_notification(product, url, 'available')
                 elif prev_available is not None and prev_available and not available:
                     logger.debug(f'Product became UNAVAILABLE: {product["title"]} ({handle})')
                     new_products.append(id_val)
-                    send_webhook_notification(wh_link, product, url, 'unavailable')
+                    send_webhook_notification(product, url, 'unavailable')
                 elif prev_available is None:
                     logger.debug(f'New product detected: {product["title"]} ({handle})')
                     new_products.append(id_val)
                     # Only Send a webhook notification if DB has been initialized
                     if init_product_count > 0:
-                        send_webhook_notification(wh_link, product, url, 'new')
+                        send_webhook_notification(product, url, 'new')
                 # Update the tracked availability in memory and DB
                 product_availability[id_val] = available
                 update_product_in_db(id_val, handle, title, available, product, url)
@@ -362,6 +384,7 @@ def Main(url):
         except Exception as e:
             if loop_exceptions > 5:
                 logger.error(f'Main loop has encountered too many exceptions ({loop_exceptions}). Exiting...')
+                send_error_webhook(f'Main loop has encountered too many exceptions last exception was ({e}). Exiting...')
                 break
             logger.error(f'Error in Main loop: {e}')
             logger.debug('Sleeping for 5 seconds before retrying...')
