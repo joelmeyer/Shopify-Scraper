@@ -411,5 +411,6 @@ for x in range(len(urls)):
     #product_threads.start()
     main_threads.start()
     logger.debug(f'{main_threads.name} initialized')
+send_error_webhook(f'SScraper 1.0 initialized with {len(urls)} URLs')
 
 db_lock = threading.Lock()
