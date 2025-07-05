@@ -4,7 +4,7 @@ A web crawler that monitors multiple shopify based websites in real time for new
 Important
 - Must use proxies if monitiring multiple websites to avoid bans
 - Make sure shopify websites /products.json isn't blocked
-- Set proxies, discord webhook, & websites into the specified txt files
+- Set proxies, discord webhook, & websites in a .env file (see exampleenv.txt)
 
 Required Modules
 - requests
@@ -14,3 +14,4 @@ Required Modules
 - time
 - datetime
 - dhooks
+- python-dotenv
