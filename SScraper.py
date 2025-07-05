@@ -14,7 +14,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 URL_PATH = 'products.json?limit=200&page=1'
-SLEEP_TIME = 300  # Default sleep time in seconds
 DB_PATH = 'data/products.db'
 
 SHOPIFY_URLS = os.getenv('SHOPIFY_URLS', '').split(',')
@@ -288,6 +287,10 @@ def update_product_in_db(id_val, handle, title, available, product, url):
         conn.commit()
         conn.close()
 
+def get_random_sleep_time(min_seconds=240, max_seconds=360):
+    """Return a random sleep time between min_seconds and max_seconds (inclusive)."""
+    return randint(min_seconds, max_seconds)
+
 def Main(url):
     logger.debug(f'Entering Main for url: {url}')
     # Initialize DB
@@ -378,8 +381,9 @@ def Main(url):
 
             
             logger.debug(f'Scraping target$* {url} new/changed products: {len(new_products)}')
-            logger.debug(f'sleeping for {SLEEP_TIME} seconds')
-            time.sleep(SLEEP_TIME)
+            sleep_time = get_random_sleep_time(240, 360)
+            logger.debug(f'sleeping for {sleep_time} seconds')
+            time.sleep(sleep_time)
             loop_exceptions = 0  # Reset exception counter after successful iteration
         except Exception as e:
             if loop_exceptions > 5:
