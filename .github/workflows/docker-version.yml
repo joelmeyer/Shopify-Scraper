@@ -25,7 +25,11 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push Docker image (stable)
+      - name: Set unprefixed tag
+        id: vars
+        run: echo "TAG_UNPREFIXED=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV
+
+      - name: Build and push Docker image (version)
         id: docker_build
         uses: docker/build-push-action@v5
         with:
@@ -33,7 +37,7 @@ jobs:
           push: true
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/shopifyscraper:${{ github.ref_name }}
-            ${{ secrets.DOCKERHUB_USERNAME }}/shopifyscraper:${{ replace(github.ref_name, 'v', '') }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/shopifyscraper:${{ env.TAG_UNPREFIXED }}
 
       - name: Image digest
         run: |
