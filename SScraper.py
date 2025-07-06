@@ -10,6 +10,7 @@ import logging
 import os
 from logging.handlers import TimedRotatingFileHandler
 from dotenv import load_dotenv
+import math
 
 load_dotenv()
 
@@ -20,6 +21,7 @@ SHOPIFY_URLS = os.getenv('SHOPIFY_URLS', '').split(',')
 PROXIES = [p for p in os.getenv('PROXIES', '').split(',') if p]
 NOTIFY_WEBHOOK = os.getenv('NOTIFY_WEBHOOK', '')
 ERROR_WEBHOOK = os.getenv('ERROR_WEBHOOK', '')
+PRODUCT_LIMIT = int(os.getenv('PRODUCT_LIMIT', '200'))
 
 # Setup logging
 LOG_DIR = 'logs'
@@ -43,61 +45,71 @@ def getProxies():
     logger.debug(f'Loaded {len(proxy)} proxies')
     return proxy
     
-def getContent(url):
-    logger.debug(f'Entering getContent for url: {url}')
-    # Gets page conent from target website.
+def getContent(url, product_limit=PRODUCT_LIMIT):
+    logger.debug(f'Entering getContent for url: {url} with product_limit: {product_limit}')
+    # Gets page content from target website, with paging support.
     proxy_list = getProxies()
-    url_1 = (url + URL_PATH)
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.131 Safari/537.36'}
-    condition = True
-    while condition == True:
-        if len(proxy_list) > 0:
-            try:
-                x = randint(0 , (len(proxy_list) - 1))
-                proxy = proxy_list[x]
-                proxy_dict = {'http': ('http://{}'.format(proxy)), 'https': ('https://{}'.format(proxy))}
-                logger.debug(f'Trying proxy: {proxy}')
-                webpage = requests.get(url_1, headers=headers, proxies=proxy_dict)
-                products = json.loads((webpage.text))['products']
-                logger.debug('Successfully fetched products with proxy')
-                condition = False
-            except Exception as e:
-                logger.error(f'Error getting orignial products: {e}\n Sleeping 3 minutes...')
-                time.sleep(180)
-                continue
-        else:
-            try:
-                logger.debug('No proxies, using localhost')
-                webpage = requests.get(url_1, headers=headers)
-                products = json.loads((webpage.text))['products']
-                logger.debug('Successfully fetched products with localhost')
-                condition = False
-            except Exception as e:
-                logger.error(f'Error getting original products: {e}\n Sleeping 3 minutes...')
-                time.sleep(180)
-                continue
-    logger.debug('Exiting getContent')
-    return products
+    all_products = []
+    page = 1
+    per_page = 200  # Shopify's max per page is usually 250, but keep at 200 for safety
+    while len(all_products) < product_limit:
+        url_1 = f"{url}products.json?limit={per_page}&page={page}"
+        condition = True
+        products = []
+        while condition:
+            if len(proxy_list) > 0:
+                try:
+                    x = randint(0 , (len(proxy_list) - 1))
+                    proxy = proxy_list[x]
+                    proxy_dict = {'http': ('http://{}'.format(proxy)), 'https': ('https://{}'.format(proxy))}
+                    logger.debug(f'Trying proxy: {proxy} (page {page})')
+                    webpage = requests.get(url_1, headers=headers, proxies=proxy_dict)
+                    products = json.loads((webpage.text))['products']
+                    logger.debug(f'Successfully fetched {len(products)} products with proxy (page {page})')
+                    condition = False
+                except Exception as e:
+                    logger.error(f'Error getting products (page {page}): {e}\n Sleeping 3 minutes...')
+                    time.sleep(180)
+                    continue
+            else:
+                try:
+                    logger.debug(f'No proxies, using localhost (page {page})')
+                    webpage = requests.get(url_1, headers=headers)
+                    products = json.loads((webpage.text))['products']
+                    logger.debug(f'Successfully fetched {len(products)} products with localhost (page {page})')
+                    condition = False
+                except Exception as e:
+                    logger.error(f'Error getting products (page {page}): {e}\n Sleeping 3 minutes...')
+                    time.sleep(180)
+                    continue
+        if not products:
+            logger.debug(f'No more products returned at page {page}. Stopping.')
+            break
+        all_products.extend(products)
+        if len(products) < per_page:
+            logger.debug(f'Last page reached at page {page}.')
+            break
+        page += 1
+    logger.debug(f'Exiting getContent. Total products fetched: {len(all_products)}')
+    return all_products
 
 def getProducts(url):
     logger.debug(f'Entering getProducts for url: {url}')
-    # Adds all current products to a list.
-    products = getContent(url)
+    # Adds all current products to a list, with paging.
+    products = getContent(url, PRODUCT_LIMIT)
     # Filter products to only those that are interesting
     interesting_products = [p for p in products if is_interesting(p)[0]]
     current_products = []
-    # Track product availability by handle
     product_availability = {}
     # Initial population of product_availability
-    for product in interesting_products: # Loops throught the 'title' handle to grab product names.
+    for product in interesting_products:
         handle = (product['handle'])
         current_products.append(handle)
         available = False
-        # If variants exist, check the first one for availability, else False
         if product.get('variants') and len(product['variants']) > 0:
             available = product['variants'][0].get('available', False)
         product_availability[handle] = available
-        
     logger.debug(f'Found {len(current_products)} interesting products')
     return current_products, product_availability
 
@@ -323,6 +335,57 @@ def get_random_sleep_time(min_seconds=240, max_seconds=360):
     """Return a random sleep time between min_seconds and max_seconds (inclusive)."""
     return randint(min_seconds, max_seconds)
 
+def fetch_all_products_with_paging(url):
+    """
+    Fetch all products from a Shopify store using paging, similar to getContent, but returns all products for Main loop usage.
+    """
+    logger.debug(f'Fetching all products with paging for url: {url}')
+    proxy_list = getProxies()
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.131 Safari/537.36'}
+    all_products = []
+    page = 1
+    per_page = 200
+    while True:
+        url_1 = f"{url}products.json?limit={per_page}&page={page}"
+        condition = True
+        products = []
+        while condition:
+            if len(proxy_list) > 0:
+                try:
+                    x = randint(0 , (len(proxy_list) - 1))
+                    proxy = proxy_list[x]
+                    proxy_dict = {'http': ('http://{}'.format(proxy)), 'https': ('https://{}'.format(proxy))}
+                    logger.debug(f'Trying proxy: {proxy} (page {page})')
+                    webpage = requests.get(url_1, headers=headers, proxies=proxy_dict)
+                    products = json.loads((webpage.text))['products']
+                    logger.debug(f'Successfully fetched {len(products)} products with proxy (page {page})')
+                    condition = False
+                except Exception as e:
+                    logger.error(f'Error getting products (page {page}): {e}\n Sleeping 3 minutes...')
+                    time.sleep(180)
+                    continue
+            else:
+                try:
+                    logger.debug(f'No proxies, using localhost (page {page})')
+                    webpage = requests.get(url_1, headers=headers)
+                    products = json.loads((webpage.text))['products']
+                    logger.debug(f'Successfully fetched {len(products)} products with localhost (page {page})')
+                    condition = False
+                except Exception as e:
+                    logger.error(f'Error getting products (page {page}): {e}\n Sleeping 3 minutes...')
+                    time.sleep(180)
+                    continue
+        if not products:
+            logger.debug(f'No more products returned at page {page}. Stopping.')
+            break
+        all_products.extend(products)
+        if len(products) < per_page:
+            logger.debug(f'Last page reached at page {page}.')
+            break
+        page += 1
+    logger.debug(f'Exiting fetch_all_products_with_paging. Total products fetched: {len(all_products)}')
+    return all_products
+
 def Main(url):
     logger.debug(f'Entering Main for url: {url}')
     # Initialize DB
@@ -331,9 +394,6 @@ def Main(url):
     product_availability = load_product_availability(url)
     init_product_count = len(product_availability)
     logger.debug(f'{init_product_count} products loaded from DB for {url}')
-    # Initial population of product_availability from getProducts (for new products)
-    #current_products, _ = getProducts(url)
-    #print(f'[Main][Thread-{threading.get_ident()}][DEBUG] Returned {len(current_products)} products')
     logger.debug(f'DB Returned {len(product_availability)} products availablity')
     proxies = getProxies()
 
@@ -343,50 +403,17 @@ def Main(url):
     while True:
         try:
             # Monitors website for new products
-            if len(proxies) > 0:
-                # Grabs a random proxy from proxy list
-                try:
-                    x = randint(0, (len(proxies) - 1))
-                    proxy = proxies[x]
-                    proxy_dict = {'http': ('http://{}'.format(proxy)), 'https': ('https://{}'.format(proxy))}
-                    logger.debug(f'Using proxy: {proxy}')
-                except Exception as e:
-                    logger.error(f'No proxies available. Exception: {e}')
-                    pass
-                try:
-                    url_1 = (url + URL_PATH)
-                    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.131 Safari/537.36'}
-                    logger.debug('Requesting products with proxy')
-                    webpage = requests.get(url_1, headers=headers, proxies=proxy_dict)
-                    products = json.loads((webpage.text))['products']
-                    logger.debug('Products fetched with proxy')
-                except Exception as e:
-                    logger.error(f'Proxies banned. Sleeping for 3 minutes... Exception: {e}')
-                    time.sleep(180)
-                    continue
-            else:
-                try:
-                    url_1 = (url + URL_PATH)
-                    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.131 Safari/537.36'}
-                    logger.debug('Requesting products with localhost')
-                    webpage = requests.get(url_1, headers=headers)
-                    products = json.loads((webpage.text))['products']
-                    logger.debug(f'{len(products)} Products fetched with localhost')
-                except Exception as e:
-                    logger.error(f'Local host banned. Sleeping for 3 minutes... Exception: {e}')
-                    time.sleep(180)
-                    continue
-
+            products = fetch_all_products_with_paging(url)
             # Filter products using is_interesting before tracking for availability and new product detection in Main.
             interesting_products = [p for p in products if is_interesting(p)[0]]
             new_products = []
-            logger.debug(f'{len(interesting_products)} interesting products fetched with localhost')
+            brandnewproducts = 0
+            logger.debug(f'{len(interesting_products)} interesting products fetched with paging')
             # --- Check for product availability changes ---
             for product in interesting_products:
                 id_val = product.get('id')
                 handle = product.get('handle', '')
                 title = product.get('title', '')
-                
                 # If variants exist, check the first one for availability, else False
                 available = False
                 if product.get('variants') and len(product['variants']) > 0:
@@ -407,15 +434,14 @@ def Main(url):
                 elif prev_available is None:
                     logger.debug(f'New product detected: {product["title"]} ({handle})')
                     new_products.append(id_val)
-                    # Only Send a webhook notification if DB has been initialized
-                    if init_product_count > 0:
+                    brandnewproducts += 1
+                    # Only Send a webhook notification if DB has been initialized and we haven't sent 5 notifications already
+                    if init_product_count > 0 and brandnewproducts <= 5:
                         send_webhook_notification(product, url, 'new')
                 # Update the tracked availability in memory and DB
                 product_availability[id_val] = available
                 update_product_in_db(id_val, handle, title, available, product, url)
             # --- End availability check ---
-
-            
             logger.debug(f'Scraping target$* {url} new/changed products: {len(new_products)}')
             sleep_time = get_random_sleep_time(240, 360)
             logger.debug(f'sleeping for {sleep_time} seconds')
