@@ -69,7 +69,7 @@ def getContent(url, product_limit=PRODUCT_LIMIT):
                     logger.debug(f'Successfully fetched {len(products)} products with proxy (page {page})')
                     condition = False
                 except Exception as e:
-                    logger.error(f'Error getting products (page {page}): {e}\n Sleeping 3 minutes...')
+                    logger.error(f'Error getting products (page {page})(url {url_1}): {e}\n Sleeping 3 minutes...')
                     time.sleep(180)
                     continue
             else:
@@ -80,7 +80,7 @@ def getContent(url, product_limit=PRODUCT_LIMIT):
                     logger.debug(f'Successfully fetched {len(products)} products with localhost (page {page})')
                     condition = False
                 except Exception as e:
-                    logger.error(f'Error getting products (page {page}): {e}\n Sleeping 3 minutes...')
+                    logger.error(f'Error getting products (page {page})(url {url_1}): {e}\n Sleeping 3 minutes...')
                     time.sleep(180)
                     continue
         if not products:
@@ -361,7 +361,7 @@ def fetch_all_products_with_paging(url):
                     logger.debug(f'Successfully fetched {len(products)} products with proxy (page {page})')
                     condition = False
                 except Exception as e:
-                    logger.error(f'Error getting products (page {page}): {e}\n Sleeping 3 minutes...')
+                    logger.error(f'Error getting products (page {page})(url {url_1}): {e}\n Sleeping 3 minutes...')
                     time.sleep(180)
                     continue
             else:
@@ -372,7 +372,7 @@ def fetch_all_products_with_paging(url):
                     logger.debug(f'Successfully fetched {len(products)} products with localhost (page {page})')
                     condition = False
                 except Exception as e:
-                    logger.error(f'Error getting products (page {page}): {e}\n Sleeping 3 minutes...')
+                    logger.error(f'Error getting products (page {page})(url {url_1}): {e}\n Sleeping 3 minutes...')
                     time.sleep(180)
                     continue
         if not products:
