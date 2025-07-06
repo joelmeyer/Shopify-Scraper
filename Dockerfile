@@ -14,7 +14,7 @@ RUN mkdir -p data
 
 COPY supervisord.conf /etc/supervisord.conf
 
-ENV FLASK_APP=web_ui.py
+ENV FLASK_APP=webapp/web_ui.py
 ENV FLASK_RUN_HOST=0.0.0.0
 
 EXPOSE 5000

@@ -7,3 +7,6 @@ __pycache__/
 logs/
 .DS_Store
 .env
+.github/
+.git/
+.vscode/

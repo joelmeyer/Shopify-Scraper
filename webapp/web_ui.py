@@ -3,8 +3,8 @@ import sqlite3
 import os
 import json
 
-app = Flask(__name__)
-DB_PATH = os.path.join(os.path.dirname(__file__), 'data/products.db')  # Adjust if your DB is elsewhere
+app = Flask(__name__, static_folder='static', template_folder='templates')
+DB_PATH = os.path.join(os.path.dirname(__file__), '../data/products.db')  # Adjusted for new structure
 
 def get_db_connection():
     conn = sqlite3.connect(DB_PATH)
