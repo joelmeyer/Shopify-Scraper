@@ -2,7 +2,7 @@ name: Build Docker Image (PR Only)
 
 on:
   pull_request:
-    branches: [ main ]
+    branches: [ master ]
   workflow_dispatch:
 
 jobs:
