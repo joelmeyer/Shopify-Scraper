@@ -11,6 +11,7 @@ import os
 from logging.handlers import TimedRotatingFileHandler
 from dotenv import load_dotenv
 import math
+import random
 
 load_dotenv()
 
@@ -22,6 +23,30 @@ PROXIES = [p for p in os.getenv('PROXIES', '').split(',') if p]
 NOTIFY_WEBHOOK = os.getenv('NOTIFY_WEBHOOK', '')
 ERROR_WEBHOOK = os.getenv('ERROR_WEBHOOK', '')
 PRODUCT_LIMIT = int(os.getenv('PRODUCT_LIMIT', '200'))
+
+# Advanced anti-bot constants
+USER_AGENTS = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.131 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.1 Safari/605.1.15',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0',
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1',
+]
+ACCEPT_LANGUAGES = [
+    'en-US,en;q=0.9',
+    'en-GB,en;q=0.8',
+    'en;q=0.7',
+    'en-US;q=0.8,en;q=0.6',
+]
+REFERERS = [
+    '',
+    'https://www.google.com/',
+    'https://www.bing.com/',
+    'https://duckduckgo.com/'
+]
+MIN_SLEEP = 180
+MAX_SLEEP = 300
+JITTER = 30
 
 # Setup logging
 LOG_DIR = 'logs'
@@ -38,6 +63,8 @@ logger.handlers = []
 logger.addHandler(file_handler)
 logger.addHandler(console_handler)
 
+db_lock = threading.Lock()
+
 def getProxies():
     logger.debug('Entering getProxies')
     # Use proxies from env
@@ -45,80 +72,85 @@ def getProxies():
     logger.debug(f'Loaded {len(proxy)} proxies')
     return proxy
     
-def getContent(url, product_limit=PRODUCT_LIMIT):
-    logger.debug(f'Entering getContent for url: {url} with product_limit: {product_limit}')
-    # Gets page content from target website, with paging support.
+def fetch_all_products_with_paging(url, product_limit=PRODUCT_LIMIT):
+    """
+    Fetch all products from a Shopify store using paging, with advanced anti-bot and error handling logic.
+    Adds a random jitter between successful requests and uses a requests.Session for cookie and connection reuse.
+    """
+    logger.debug(f'Fetching all products with paging for url: {url}')
     proxy_list = getProxies()
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.131 Safari/537.36'}
     all_products = []
     page = 1
-    per_page = 200  # Shopify's max per page is usually 250, but keep at 200 for safety
+    per_page = 200
+    site_429_count = 0
+    max_429_skip = 5  # After this many 429s, skip site for 30 min
+    session = requests.Session()  # Use a session for cookies and connection reuse
     while len(all_products) < product_limit:
         url_1 = f"{url}products.json?limit={per_page}&page={page}"
         condition = True
         products = []
+        backoff = random.randint(MIN_SLEEP, MAX_SLEEP)  # Start with random 3-5 min
+        headers = {
+            'User-Agent': random.choice(USER_AGENTS),
+            'Accept': 'application/json, text/javascript, */*; q=0.01',
+            'Accept-Language': random.choice(ACCEPT_LANGUAGES),
+            'Referer': random.choice(REFERERS) or url,
+            'Connection': 'keep-alive',
+        }
         while condition:
-            if len(proxy_list) > 0:
-                try:
-                    x = randint(0 , (len(proxy_list) - 1))
+            use_proxy = len(proxy_list) > 0
+            try:
+                if use_proxy:
+                    x = randint(0, len(proxy_list) - 1)
                     proxy = proxy_list[x]
-                    proxy_dict = {'http': ('http://{}'.format(proxy)), 'https': ('https://{}'.format(proxy))}
+                    proxy_dict = {'http': f'http://{proxy}', 'https': f'https://{proxy}'}
                     logger.debug(f'Trying proxy: {proxy} (page {page})')
-                    webpage = requests.get(url_1, headers=headers, proxies=proxy_dict)
-                    products = json.loads((webpage.text))['products']
-                    logger.debug(f'Successfully fetched {len(products)} products with proxy (page {page})')
-                    condition = False
-                except Exception as e:
-                    logger.error(f'Error getting products (page {page})(url {url_1}): {e}\n Sleeping 3 minutes...')
-                    time.sleep(180)
-                    continue
-            else:
-                try:
+                    webpage = session.get(url_1, headers=headers, proxies=proxy_dict, timeout=30)
+                else:
                     logger.debug(f'No proxies, using localhost (page {page})')
-                    webpage = requests.get(url_1, headers=headers)
-                    products = json.loads((webpage.text))['products']
-                    logger.debug(f'Successfully fetched {len(products)} products with localhost (page {page})')
-                    condition = False
-                except Exception as e:
-                    logger.error(f'Error getting products (page {page})(url {url_1}): {e}\n Sleeping 3 minutes...')
-                    time.sleep(180)
+                    webpage = session.get(url_1, headers=headers, timeout=30)
+                if webpage.status_code == 429:
+                    logger.error(f'Non-200 response 429 for {url_1}: {webpage.text[:200]}')
+                    site_429_count += 1
+                    if site_429_count >= max_429_skip:
+                        logger.error(f'Too many 429s for {url}. Skipping this site for 30 minutes.')
+                        time.sleep(1800 + random.randint(0, JITTER))
+                        site_429_count = 0
+                    else:
+                        logger.debug(f'Backing off for {backoff} seconds (exponential, with jitter)')
+                        time.sleep(backoff + random.randint(0, JITTER))
+                        backoff = min(backoff * 2, 1800)
                     continue
+                elif webpage.status_code != 200:
+                    logger.error(f'Non-200 response {webpage.status_code} for {url_1}: {webpage.text[:200]}')
+                    time.sleep(random.randint(MIN_SLEEP, MAX_SLEEP))
+                    continue
+                try:
+                    products = json.loads((webpage.text))['products']
+                except Exception as e:
+                    logger.error(f'JSON decode error for {url_1}: {e}\nResponse: {webpage.text[:200]}')
+                    time.sleep(random.randint(MIN_SLEEP, MAX_SLEEP))
+                    continue
+                logger.debug(f'Successfully fetched {len(products)} products (page {page})')
+                condition = False
+            except Exception as e:
+                logger.error(f'Error getting products (page {page})(url {url_1}): {e}\n Sleeping 3 minutes...')
+                time.sleep(random.randint(MIN_SLEEP, MAX_SLEEP))
+                continue
         if not products:
             logger.debug(f'No more products returned at page {page}. Stopping.')
             break
         all_products.extend(products)
+        # Add jitter between successful requests
+        sleep_jitter = random.randint(0, JITTER)
+        logger.debug(f'Jitter sleep for {sleep_jitter} seconds after page {page}')
+        time.sleep(sleep_jitter)
         if len(products) < per_page:
             logger.debug(f'Last page reached at page {page}.')
             break
         page += 1
-    logger.debug(f'Exiting getContent. Total products fetched: {len(all_products)}')
+    logger.debug(f'Exiting fetch_all_products_with_paging. Total products fetched: {len(all_products)}')
     return all_products
-
-def getProducts(url):
-    logger.debug(f'Entering getProducts for url: {url}')
-    # Adds all current products to a list, with paging.
-    products = getContent(url, PRODUCT_LIMIT)
-    # Filter products to only those that are interesting
-    interesting_products = [p for p in products if is_interesting(p)[0]]
-    current_products = []
-    product_availability = {}
-    # Initial population of product_availability
-    for product in interesting_products:
-        handle = (product['handle'])
-        current_products.append(handle)
-        available = False
-        if product.get('variants') and len(product['variants']) > 0:
-            available = product['variants'][0].get('available', False)
-        product_availability[handle] = available
-    logger.debug(f'Found {len(current_products)} interesting products')
-    return current_products, product_availability
-
-def is_interesting(product):
-    # Check product_type
-    product_type = get_alcohol_type(product)
-    if product_type.lower() in ['bourbon','whiskey','scotch','other']:
-        return True, product_type
-    return False, product_type
 
 def get_alcohol_type(product):
     # Lowercase all relevant fields for easier matching
@@ -335,56 +367,14 @@ def get_random_sleep_time(min_seconds=240, max_seconds=360):
     """Return a random sleep time between min_seconds and max_seconds (inclusive)."""
     return randint(min_seconds, max_seconds)
 
-def fetch_all_products_with_paging(url):
+def is_interesting(product):
     """
-    Fetch all products from a Shopify store using paging, similar to getContent, but returns all products for Main loop usage.
+    Returns (True, product_type) if the product is interesting (alcohol type is bourbon, whiskey, scotch, or other), else (False, product_type).
     """
-    logger.debug(f'Fetching all products with paging for url: {url}')
-    proxy_list = getProxies()
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.131 Safari/537.36'}
-    all_products = []
-    page = 1
-    per_page = 200
-    while True:
-        url_1 = f"{url}products.json?limit={per_page}&page={page}"
-        condition = True
-        products = []
-        while condition:
-            if len(proxy_list) > 0:
-                try:
-                    x = randint(0 , (len(proxy_list) - 1))
-                    proxy = proxy_list[x]
-                    proxy_dict = {'http': ('http://{}'.format(proxy)), 'https': ('https://{}'.format(proxy))}
-                    logger.debug(f'Trying proxy: {proxy} (page {page})')
-                    webpage = requests.get(url_1, headers=headers, proxies=proxy_dict)
-                    products = json.loads((webpage.text))['products']
-                    logger.debug(f'Successfully fetched {len(products)} products with proxy (page {page})')
-                    condition = False
-                except Exception as e:
-                    logger.error(f'Error getting products (page {page})(url {url_1}): {e}\n Sleeping 3 minutes...')
-                    time.sleep(180)
-                    continue
-            else:
-                try:
-                    logger.debug(f'No proxies, using localhost (page {page})')
-                    webpage = requests.get(url_1, headers=headers)
-                    products = json.loads((webpage.text))['products']
-                    logger.debug(f'Successfully fetched {len(products)} products with localhost (page {page})')
-                    condition = False
-                except Exception as e:
-                    logger.error(f'Error getting products (page {page})(url {url_1}): {e}\n Sleeping 3 minutes...')
-                    time.sleep(180)
-                    continue
-        if not products:
-            logger.debug(f'No more products returned at page {page}. Stopping.')
-            break
-        all_products.extend(products)
-        if len(products) < per_page:
-            logger.debug(f'Last page reached at page {page}.')
-            break
-        page += 1
-    logger.debug(f'Exiting fetch_all_products_with_paging. Total products fetched: {len(all_products)}')
-    return all_products
+    product_type = get_alcohol_type(product)
+    if product_type.lower() in ['bourbon', 'whiskey', 'scotch', 'other']:
+        return True, product_type
+    return False, product_type
 
 def Main(url):
     logger.debug(f'Entering Main for url: {url}')
@@ -478,5 +468,3 @@ for x in range(len(urls)):
     main_threads.start()
     logger.debug(f'{main_threads.name} initialized')
 send_error_webhook(f'SScraper 1.0 initialized with {len(urls)} URLs')
-
-db_lock = threading.Lock()
