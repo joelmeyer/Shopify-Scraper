@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>All Products</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #f7f7f9;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 40px auto;
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+            padding: 32px 24px 24px 24px;
+        }
+        h1 {
+            margin-top: 0;
+            color: #22223b;
+        }
+        .filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 18px;
+            align-items: center;
+        }
+        .filters input[type="text"],
+        .filters select {
+            padding: 7px 10px;
+            border-radius: 5px;
+            border: 1px solid #bfc7d1;
+            font-size: 15px;
+        }
+        .filters button {
+            padding: 7px 18px;
+            border-radius: 5px;
+            border: none;
+            background: #4f8cff;
+            color: #fff;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .filters button:hover {
+            background: #2563eb;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        th, td {
+            padding: 12px 8px;
+            text-align: left;
+        }
+        th {
+            background: #4f8cff;
+            color: #fff;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        tr:nth-child(even) {
+            background: #f2f6fc;
+        }
+        tr:hover {
+            background: #e3eaff;
+        }
+        .product-img {
+            width: 60px;
+            height: 60px;
+            object-fit: contain;
+            border-radius: 6px;
+            background: #f2f2f2;
+        }
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        .pagination a, .pagination span {
+            padding: 8px 14px;
+            border-radius: 5px;
+            background: #e9ecef;
+            color: #22223b;
+            text-decoration: none;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+        .pagination a:hover {
+            background: #4f8cff;
+            color: #fff;
+        }
+        .pagination .active {
+            background: #4f8cff;
+            color: #fff;
+            pointer-events: none;
+        }
+        @media (max-width: 900px) {
+            .container { padding: 10px; }
+            table, th, td { font-size: 14px; }
+            .product-img { width: 40px; height: 40px; }
+        }
+        @media (max-width: 600px) {
+            table, thead, tbody, th, td, tr { display: block; }
+            th, td { padding: 8px 4px; }
+            th { position: sticky; top: 0; }
+        }
+        .details-row td { border-top: none !important; }
+        .expand-btn { color: #444; }
+        .availability-yes {
+            color: #16a34a;
+            font-weight: bold;
+        }
+        .availability-no {
+            color: #dc2626;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h1>All Products</h1>
+        <button id="refreshBtn" style="padding:8px 18px;font-size:15px;">Refresh</button>
+    </div>
+    <div class="filters">
+        <input type="text" id="searchInput" placeholder="Search...">
+        <select id="vendorFilter"><option value="">All Vendors</option></select>
+        <select id="typeFilter"><option value="">All Types</option></select>
+        <select id="availableFilter">
+            <option value="">All</option>
+            <option value="1">Available</option>
+            <option value="0">Unavailable</option>
+        </select>
+        <select id="inputUrlFilter"><option value="">All Input URLs</option></select>
+        <button onclick="resetFilters()">Reset</button>
+    </div>
+    <table id="productsTable">
+        <thead>
+            <tr>
+                <th>Image</th>
+                <th onclick="sortTable('title')">Title</th>
+                <th onclick="sortTable('price')">Price</th>
+                <th onclick="sortTable('available')">Available</th>
+                <th onclick="sortTable('vendor')">Vendor</th>
+                <th onclick="sortTable('alcohol_type')">Alcohol Type</th>
+                <th onclick="sortTable('published_at')">Published At</th>
+                <th onclick="sortTable('updated_at')">Updated At</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody id="productsBody">
+        </tbody>
+    </table>
+    <div class="pagination" id="pagination"></div>
+</div>
+<script>
+let products = [];
+let filtered = [];
+let sortKey = 'id';
+let sortAsc = true;
+const perPage = 50;
+const backendChunkSize = 500;
+let currentPage = 1;
+let totalPages = 1;
+let totalRecords = 0;
+let allDataLoaded = false;
+
+async function fetchProducts(page = 1, append = false) {
+    const chunkPage = Math.floor((products.length) / backendChunkSize) + 1;
+    const res = await fetch(`/api/products?page=${chunkPage}&per_page=${backendChunkSize}`);
+    const data = await res.json();
+    if (append) {
+        products = products.concat(data.products);
+    } else {
+        products = data.products;
+    }
+    filtered = [...products];
+    totalRecords = data.total;
+    totalPages = Math.ceil(totalRecords / perPage) || 1;
+    if (products.length < totalRecords) {
+        // Continue loading next chunk in background
+        fetchProducts(page, true).then(() => {
+            populateFilters();
+            filterTable();
+        });
+    } else {
+        allDataLoaded = true;
+    }
+    populateFilters();
+    filterTable();
+}
+
+function renderTable() {
+    const body = document.getElementById('productsBody');
+    body.innerHTML = '';
+    const start = (currentPage - 1) * perPage;
+    const end = Math.min(start + perPage, filtered.length);
+    for (let i = start; i < end; i++) {
+        const p = filtered[i];
+        const availClass = p.available ? 'availability-yes' : 'availability-no';
+        const availText = p.available ? 'Yes' : 'No';
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${p.image_url ? `<img src="${p.image_url}" class="product-img">` : ''}</td>
+            <td><a href="${p.url}" target="_blank">${p.title}</a></td>
+            <td>${p.price || ''}</td>
+            <td class="${availClass}">${availText}</td>
+            <td>${p.vendor || ''}</td>
+            <td>${p.alcohol_type || ''}</td>
+            <td><span class="date-cell">${p.published_at || ''}</span></td>
+            <td><span class="date-cell">${p.updated_at || ''}</span></td>
+            <td><button class="expand-btn" data-idx="${i}" style="background:none;border:none;font-size:18px;cursor:pointer;">▶</button></td>
+        `;
+        body.appendChild(row);
+        // Details row (hidden by default)
+        const details = document.createElement('tr');
+        details.className = 'details-row';
+        details.style.display = 'none';
+        details.innerHTML = `<td colspan="9">
+            <div style="padding:12px 18px;background:#f6f6fa;border-radius:7px;">
+                <b>Input URL:</b> ${p.input_url || ''}<br>
+                <b>Created At:</b> <span class="date-cell">${p.created_at || ''}</span><br>
+                <b>Last Seen:</b> <span class="date-cell">${p.last_seen || ''}</span><br>
+                <b>Became Available At:</b> <span class="date-cell">${p.became_available_at || ''}</span><br>
+                <b>Became Unavailable At:</b> <span class="date-cell">${p.became_unavailable_at || ''}</span><br>
+            </div>
+        </td>`;
+        body.appendChild(details);
+    }
+    // Add expand/collapse logic
+    document.querySelectorAll('.expand-btn').forEach(btn => {
+        btn.onclick = function() {
+            const idx = parseInt(btn.getAttribute('data-idx'));
+            const detailsRow = body.children[(idx - start) * 2 + 1];
+            if (detailsRow.style.display === 'none') {
+                detailsRow.style.display = '';
+                btn.textContent = '▼';
+            } else {
+                detailsRow.style.display = 'none';
+                btn.textContent = '▶';
+            }
+        };
+    });
+    // Render dates in browser timezone
+    document.querySelectorAll('.date-cell').forEach(cell => {
+        if (cell.textContent && !isNaN(Date.parse(cell.textContent))) {
+            const d = new Date(cell.textContent);
+            cell.textContent = d.toLocaleString();
+        }
+    });
+}
+
+function renderPagination() {
+    const pagDiv = document.getElementById('pagination');
+    pagDiv.innerHTML = '';
+    function pageBtn(p, label) {
+        const el = document.createElement(p === currentPage ? 'span' : 'a');
+        el.textContent = label || p;
+        if (p !== currentPage) el.href = '#';
+        if (p === currentPage) el.className = 'active';
+        el.onclick = e => { e.preventDefault(); currentPage = p; fetchProducts(p); };
+        return el;
+    }
+    if (currentPage > 1) {
+        pagDiv.appendChild(pageBtn(1, '« First'));
+        pagDiv.appendChild(pageBtn(currentPage-1, '‹ Prev'));
+    }
+    for (let p=1; p<=totalPages; ++p) {
+        if (p === 1 || p === totalPages || Math.abs(p-currentPage)<=1) {
+            pagDiv.appendChild(pageBtn(p));
+        } else if ((p === 2 && currentPage > 4) || (p === totalPages-1 && currentPage < totalPages-3)) {
+            const span = document.createElement('span');
+            span.textContent = '...';
+            pagDiv.appendChild(span);
+        }
+    }
+    if (currentPage < totalPages) {
+        pagDiv.appendChild(pageBtn(currentPage+1, 'Next ›'));
+        pagDiv.appendChild(pageBtn(totalPages, 'Last »'));
+    }
+}
+
+function sortTable(key) {
+    if (sortKey === key) sortAsc = !sortAsc; else { sortKey = key; sortAsc = true; }
+    filtered.sort((a, b) => {
+        let va = a[key] || '';
+        let vb = b[key] || '';
+        if (key === 'price') { va = parseFloat(va)||0; vb = parseFloat(vb)||0; }
+        if (va < vb) return sortAsc ? -1 : 1;
+        if (va > vb) return sortAsc ? 1 : -1;
+        return 0;
+    });
+    renderTable();
+}
+
+function filterTable() {
+    const q = document.getElementById('searchInput').value.toLowerCase();
+    const vendor = document.getElementById('vendorFilter').value;
+    const type = document.getElementById('typeFilter').value;
+    const avail = document.getElementById('availableFilter').value;
+    const inputUrl = document.getElementById('inputUrlFilter').value;
+    filtered = products.filter(p => {
+        let match = true;
+        if (q) match = (p.title && p.title.toLowerCase().includes(q)) || (p.vendor && p.vendor.toLowerCase().includes(q)) || (p.alcohol_type && p.alcohol_type.toLowerCase().includes(q));
+        if (vendor && p.vendor !== vendor) match = false;
+        if (type && p.alcohol_type !== type) match = false;
+        if (avail && String(Number(!!p.available)) !== avail) match = false;
+        if (inputUrl && p.input_url !== inputUrl) match = false;
+        return match;
+    });
+    sortTable(sortKey);
+}
+
+function resetFilters() {
+    document.getElementById('searchInput').value = '';
+    document.getElementById('vendorFilter').value = '';
+    document.getElementById('typeFilter').value = '';
+    document.getElementById('availableFilter').value = '';
+    document.getElementById('inputUrlFilter').value = '';
+    filterTable();
+}
+
+function populateFilters() {
+    const vendors = [...new Set(products.map(p => p.vendor).filter(Boolean))].sort();
+    const types = [...new Set(products.map(p => p.alcohol_type).filter(Boolean))].sort();
+    const inputUrls = [...new Set(products.map(p => p.input_url).filter(Boolean))].sort();
+    const vendorSel = document.getElementById('vendorFilter');
+    const typeSel = document.getElementById('typeFilter');
+    const inputUrlSel = document.getElementById('inputUrlFilter');
+    vendorSel.innerHTML = '<option value="">All Vendors</option>';
+    typeSel.innerHTML = '<option value="">All Types</option>';
+    inputUrlSel.innerHTML = '<option value="">All Input URLs</option>';
+    vendors.forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; vendorSel.appendChild(o); });
+    types.forEach(t => { const o = document.createElement('option'); o.value = t; o.textContent = t; typeSel.appendChild(o); });
+    inputUrls.forEach(u => { const o = document.createElement('option'); o.value = u; o.textContent = u; inputUrlSel.appendChild(o); });
+}
+
+function formatDate(dateStr) {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    if (isNaN(d)) return dateStr;
+    return d.toLocaleString();
+}
+
+document.getElementById('searchInput').addEventListener('input', filterTable);
+document.getElementById('vendorFilter').addEventListener('change', filterTable);
+document.getElementById('typeFilter').addEventListener('change', filterTable);
+document.getElementById('availableFilter').addEventListener('change', filterTable);
+document.getElementById('inputUrlFilter').addEventListener('change', filterTable);
+window.onload = function() {
+    fetchProducts(currentPage);
+};
+document.getElementById('refreshBtn').onclick = async function() {
+    products = [];
+    filtered = [];
+    allDataLoaded = false;
+    await fetchProducts(1, false);
+    renderTable();
+    populateFilters();
+    renderPagination();
+};
+</script>
+</body>
+</html>

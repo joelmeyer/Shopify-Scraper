@@ -15,3 +15,6 @@ Required Modules
 - datetime
 - dhooks
 - python-dotenv
+
+Example run command
+- docker run --env-file .env -v $(pwd)/data:/app/data -it shopifyscraper

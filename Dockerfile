@@ -4,7 +4,7 @@ FROM python:3.11-slim
 WORKDIR /app
 
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt && pip install supervisor
 
 COPY . .
 
@@ -12,4 +12,11 @@ COPY . .
 RUN mkdir -p logs
 RUN mkdir -p data
 
-CMD ["python", "SScraper.py"]
+COPY supervisord.conf /etc/supervisord.conf
+
+ENV FLASK_APP=web_ui.py
+ENV FLASK_RUN_HOST=0.0.0.0
+
+EXPOSE 5000
+
+CMD ["supervisord", "-c", "/etc/supervisord.conf"]

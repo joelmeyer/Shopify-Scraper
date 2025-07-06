@@ -223,9 +223,14 @@ def send_webhook_notification(product, url, event_type):
 def send_error_webhook(message):
     send_webhook('error', content=message)
 
+def column_exists(cursor, table, column):
+    cursor.execute(f"PRAGMA table_info({table})")
+    return any(row[1] == column for row in cursor.fetchall())
+
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
+    # Add columns if they do not exist
     c.execute('''CREATE TABLE IF NOT EXISTS products (
         id INTEGER,
         handle TEXT,
@@ -241,8 +246,21 @@ def init_db():
         original_json TEXT,
         input_url TEXT,
         alcohol_type TEXT,
+        became_available_at TEXT,
+        became_unavailable_at TEXT,
         PRIMARY KEY (id, input_url)
     )''')
+    # Add columns if missing (for migrations)
+    if not column_exists(c, 'products', 'became_available_at'):
+        try:
+            c.execute('ALTER TABLE products ADD COLUMN became_available_at TEXT')
+        except Exception:
+            pass
+    if not column_exists(c, 'products', 'became_unavailable_at'):
+        try:
+            c.execute('ALTER TABLE products ADD COLUMN became_unavailable_at TEXT')
+        except Exception:
+            pass
     conn.commit()
     conn.close()
 
@@ -284,6 +302,20 @@ def update_product_in_db(id_val, handle, title, available, product, url):
                         original_json=excluded.original_json,
                         alcohol_type=excluded.alcohol_type''',
                   (id_val, handle, title, int(available), published_at, created_at, updated_at, vendor, product_url, price, original_json, input_url, alcohol_type))
+        conn.commit()
+        conn.close()
+
+def update_availability_timestamps(product_id, input_url, became_available_at=None, became_unavailable_at=None):
+    """
+    Update only the became_available_at and/or became_unavailable_at columns for a product.
+    """
+    with db_lock:
+        conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+        c = conn.cursor()
+        if became_available_at is not None:
+            c.execute('UPDATE products SET became_available_at = ? WHERE id = ? AND input_url = ?', (became_available_at, product_id, input_url))
+        if became_unavailable_at is not None:
+            c.execute('UPDATE products SET became_unavailable_at = ? WHERE id = ? AND input_url = ?', (became_unavailable_at, product_id, input_url))
         conn.commit()
         conn.close()
 
@@ -364,10 +396,14 @@ def Main(url):
                     logger.debug(f'Product became available: {product["title"]} ({handle})')
                     new_products.append(id_val)
                     send_webhook_notification(product, url, 'available')
+                    now = datetime.datetime.utcnow().isoformat()
+                    update_availability_timestamps(id_val, url, became_available_at=now)
                 elif prev_available is not None and prev_available and not available:
                     logger.debug(f'Product became UNAVAILABLE: {product["title"]} ({handle})')
                     new_products.append(id_val)
                     send_webhook_notification(product, url, 'unavailable')
+                    now = datetime.datetime.utcnow().isoformat()
+                    update_availability_timestamps(id_val, url, became_unavailable_at=now)
                 elif prev_available is None:
                     logger.debug(f'New product detected: {product["title"]} ({handle})')
                     new_products.append(id_val)
