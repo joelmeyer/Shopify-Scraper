@@ -1,9 +1,9 @@
-name: Build and Push Docker Stable Image
+name: Build and Push Docker Versioned Image
 
 on:
   push:
     tags:
-      - 'stable'
+      - 'v*'
   workflow_dispatch:
 
 jobs:
@@ -31,7 +31,9 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/shopifyscraper:stable
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/shopifyscraper:${{ github.ref_name }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/shopifyscraper:${{ github.ref_name | replace('v', '') }}
 
       - name: Image digest
         run: |
