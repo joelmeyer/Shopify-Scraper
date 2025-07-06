@@ -33,7 +33,7 @@ jobs:
           push: true
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/shopifyscraper:${{ github.ref_name }}
-            ${{ secrets.DOCKERHUB_USERNAME }}/shopifyscraper:${{ github.ref_name | replace('v', '') }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/shopifyscraper:${{ replace(github.ref_name, 'v', '') }}
 
       - name: Image digest
         run: |
