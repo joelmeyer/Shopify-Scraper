@@ -24,11 +24,12 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and push Docker image
+        id: docker_build
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/shopifyscraper:latest
-
       - name: Image digest
-        run: echo "Image digest: ${{ steps.docker_build.outputs.digest }}"
+        run: |
+          echo "Image digest: ${{ steps.docker_build.outputs.digest }}"
