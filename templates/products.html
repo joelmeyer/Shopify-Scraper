@@ -107,9 +107,12 @@
             .product-img { width: 40px; height: 40px; }
         }
         @media (max-width: 600px) {
+            .filters { flex-direction: column; align-items: stretch; }
+            .filters input, .filters select, .filters button { width: 100%; margin-bottom: 6px; }
             table, thead, tbody, th, td, tr { display: block; }
             th, td { padding: 8px 4px; }
             th { position: sticky; top: 0; }
+            .pagination { flex-direction: column; gap: 2px; }
         }
         .details-row td { border-top: none !important; }
         .expand-btn { color: #444; }
@@ -140,6 +143,13 @@
         </select>
         <select id="inputUrlFilter"><option value="">All Input URLs</option></select>
         <button onclick="resetFilters()">Reset</button>
+    </div>
+    <div id="loading" style="display:none;text-align:center;margin:20px 0;font-size:18px;color:#4f8cff;">
+        Loading products...
+    </div>
+    <div id="errorMsg" style="display:none;text-align:center;margin:10px 0;color:#dc2626;font-weight:bold;"></div>
+    <div style="text-align:right;margin-bottom:10px;">
+        <button id="exportBtn" style="padding:7px 18px;font-size:15px;">Export CSV</button>
     </div>
     <table id="productsTable">
         <thead>
@@ -173,28 +183,38 @@ let totalRecords = 0;
 let allDataLoaded = false;
 
 async function fetchProducts(page = 1, append = false) {
-    const chunkPage = Math.floor((products.length) / backendChunkSize) + 1;
-    const res = await fetch(`/api/products?page=${chunkPage}&per_page=${backendChunkSize}`);
-    const data = await res.json();
-    if (append) {
-        products = products.concat(data.products);
-    } else {
-        products = data.products;
+    document.getElementById('loading').style.display = '';
+    document.getElementById('errorMsg').style.display = 'none';
+    try {
+        const chunkPage = Math.floor((products.length) / backendChunkSize) + 1;
+        const res = await fetch(`/api/products?page=${chunkPage}&per_page=${backendChunkSize}`);
+        if (!res.ok) throw new Error('Failed to fetch products');
+        const data = await res.json();
+        if (append) {
+            products = products.concat(data.products);
+        } else {
+            products = data.products;
+        }
+        filtered = [...products];
+        totalRecords = data.total;
+        totalPages = Math.ceil(totalRecords / perPage) || 1;
+        if (products.length < totalRecords) {
+            // Continue loading next chunk in background
+            fetchProducts(page, true).then(() => {
+                populateFilters();
+                filterTable();
+            });
+        } else {
+            allDataLoaded = true;
+        }
+        populateFilters();
+        filterTable();
+    } catch (err) {
+        document.getElementById('errorMsg').textContent = err.message;
+        document.getElementById('errorMsg').style.display = '';
+    } finally {
+        document.getElementById('loading').style.display = 'none';
     }
-    filtered = [...products];
-    totalRecords = data.total;
-    totalPages = Math.ceil(totalRecords / perPage) || 1;
-    if (products.length < totalRecords) {
-        // Continue loading next chunk in background
-        fetchProducts(page, true).then(() => {
-            populateFilters();
-            filterTable();
-        });
-    } else {
-        allDataLoaded = true;
-    }
-    populateFilters();
-    filterTable();
 }
 
 function renderTable() {
@@ -366,6 +386,33 @@ document.getElementById('refreshBtn').onclick = async function() {
     populateFilters();
     renderPagination();
 };
+function exportCSV() {
+    let csv = '';
+    const headers = ['Title','Price','Available','Vendor','Alcohol Type','Published At','Updated At','Input URL'];
+    csv += headers.join(',') + '\n';
+    filtered.forEach(p => {
+        csv += [
+            '"'+(p.title||'')+'"',
+            p.price||'',
+            p.available ? 'Yes' : 'No',
+            '"'+(p.vendor||'')+'"',
+            '"'+(p.alcohol_type||'')+'"',
+            p.published_at||'',
+            p.updated_at||'',
+            '"'+(p.input_url||'')+'"'
+        ].join(',') + '\n';
+    });
+    const blob = new Blob([csv], {type:'text/csv'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'products.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+document.getElementById('exportBtn').onclick = exportCSV;
 </script>
 </body>
 </html>

@@ -1,3 +1,4 @@
 logs/*.log
 *.db
 .env
+Shopify-Scraper.code-workspace
