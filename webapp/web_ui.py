@@ -16,7 +16,7 @@ def get_db_connection():
 @app.route('/products')
 def all_products():
     conn = get_db_connection()
-    products = conn.execute('SELECT id, title, price, available, vendor, alcohol_type, original_json, url, input_url, published_at, created_at, updated_at, last_seen, became_available_at, became_unavailable_at FROM products ORDER BY last_seen DESC').fetchall()
+    products = conn.execute('SELECT id, title, price, available, vendor, alcohol_type, original_json, url, input_url, published_at, created_at, updated_at, last_seen, became_available_at, became_unavailable_at, date_added FROM products ORDER BY last_seen DESC').fetchall()
     product_list = []
     for p in products:
         img_url = None
@@ -39,7 +39,7 @@ def api_products():
     offset = (page - 1) * per_page
     conn = get_db_connection()
     total = conn.execute('SELECT COUNT(*) FROM products').fetchone()[0]
-    products = conn.execute('SELECT id, title, price, available, vendor, alcohol_type, original_json, url, input_url, published_at, created_at, updated_at, last_seen, became_available_at, became_unavailable_at FROM products ORDER BY last_seen DESC LIMIT ? OFFSET ?', (per_page, offset)).fetchall()
+    products = conn.execute('SELECT id, title, price, available, vendor, alcohol_type, original_json, url, input_url, published_at, created_at, updated_at, last_seen, became_available_at, became_unavailable_at, date_added FROM products ORDER BY last_seen DESC LIMIT ? OFFSET ?', (per_page, offset)).fetchall()
     product_list = []
     for p in products:
         img_url = None
@@ -132,7 +132,7 @@ def search_products():
     offset = (page - 1) * per_page
     conn = get_db_connection()
     like = f'%{q}%'
-    products = conn.execute('''SELECT id, title, price, available, vendor, alcohol_type, original_json, url, input_url, published_at, created_at, updated_at, last_seen, became_available_at, became_unavailable_at FROM products WHERE title LIKE ? OR vendor LIKE ? OR alcohol_type LIKE ? OR original_json LIKE ? ORDER BY last_seen DESC LIMIT ? OFFSET ?''', (like, like, like, like, per_page, offset)).fetchall()
+    products = conn.execute('''SELECT id, title, price, available, vendor, alcohol_type, original_json, url, input_url, published_at, created_at, updated_at, last_seen, became_available_at, became_unavailable_at, date_added FROM products WHERE title LIKE ? OR vendor LIKE ? OR alcohol_type LIKE ? OR original_json LIKE ? ORDER BY last_seen DESC LIMIT ? OFFSET ?''', (like, like, like, like, per_page, offset)).fetchall()
     total = conn.execute('''SELECT COUNT(*) FROM products WHERE title LIKE ? OR vendor LIKE ? OR alcohol_type LIKE ? OR original_json LIKE ?''', (like, like, like, like)).fetchone()[0]
     product_list = []
     for p in products:

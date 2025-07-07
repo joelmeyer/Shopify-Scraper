@@ -113,6 +113,7 @@ function renderTable() {
                 <b>Last Seen:</b> <span class="date-cell">${p.last_seen || ''}</span><br>
                 <b>Became Available At:</b> <span class="date-cell">${p.became_available_at || ''}</span><br>
                 <b>Became Unavailable At:</b> <span class="date-cell">${p.became_unavailable_at || ''}</span><br>
+                <b>Date Added:</b> <span class="date-cell">${p.date_added || ''}</span><br>
             </div>
         </td>`;
         body.appendChild(details);

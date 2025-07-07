@@ -190,6 +190,8 @@ components:
           type: string
         image_url:
           type: string
+        date_added:
+          type: string
   examples:
     ProductExample:
       value:
@@ -210,3 +212,4 @@ components:
         became_unavailable_at: null
         last_seen: "2025-07-07T13:53:12"
         image_url: "https://cdn.shopify.com/s/files/1/0363/8621/files/rare_bourbon.jpg"
+        date_added: "2024-11-09T08:57:26-08:00"

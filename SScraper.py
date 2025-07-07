@@ -300,6 +300,7 @@ def init_db():
         alcohol_type TEXT,
         became_available_at TEXT,
         became_unavailable_at TEXT,
+        date_added TEXT DEFAULT (datetime('now')),
         PRIMARY KEY (id, input_url)
     )''')
     # Add columns if missing (for migrations)
@@ -311,6 +312,11 @@ def init_db():
     if not column_exists(c, 'products', 'became_unavailable_at'):
         try:
             c.execute('ALTER TABLE products ADD COLUMN became_unavailable_at TEXT')
+        except Exception:
+            pass
+    if not column_exists(c, 'products', 'date_added'):
+        try:
+            c.execute("ALTER TABLE products ADD COLUMN date_added TEXT DEFAULT (datetime('now'))")
         except Exception:
             pass
     conn.commit()
@@ -338,8 +344,8 @@ def update_product_in_db(id_val, handle, title, available, product, url):
         original_json = json.dumps(product)
         input_url = url
         alcohol_type = get_alcohol_type(product)
-        c.execute('''INSERT INTO products (id, handle, title, available, last_seen, published_at, created_at, updated_at, vendor, url, price, original_json, input_url, alcohol_type)
-                     VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        c.execute('''INSERT INTO products (id, handle, title, available, last_seen, published_at, created_at, updated_at, vendor, url, price, original_json, input_url, alcohol_type, date_added)
+                     VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                      ON CONFLICT(id, input_url) DO UPDATE SET
                         handle=excluded.handle,
                         title=excluded.title,
@@ -434,7 +440,7 @@ def Main(url):
                     new_products.append(id_val)
                     brandnewproducts += 1
                     # Only Send a webhook notification if DB has been initialized and we haven't sent 5 notifications already
-                    if init_product_count > 0 and brandnewproducts <= 5:
+                    if init_product_count > 0 and brandnewproducts <= 15:
                         send_webhook_notification(product, url, 'new')
                 # Update the tracked availability in memory and DB
                 product_availability[id_val] = available
