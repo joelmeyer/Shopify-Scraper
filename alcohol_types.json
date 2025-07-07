@@ -1,0 +1,30 @@
+[
+  { "type": "Bourbon", "keywords": ["bourbon"] },
+  { "type": "Scotch", "keywords": ["scotch"] },
+  { "type": "Whiskey", "keywords": ["whiskey", "whisky", "rye"] },
+  { "type": "Vodka", "keywords": ["vodka"] },
+  { "type": "Tequila", "keywords": ["tequila"] },
+  { "type": "Mezcal", "keywords": ["mezcal"] },
+  { "type": "Rum", "keywords": ["rum"] },
+  { "type": "Cognac", "keywords": ["cognac"] },
+  { "type": "Champagne/Sparkling Wine", "keywords": ["champagne", "sparkling"] },
+  { "type": "Wine", "keywords": ["wine", "chardonnay", "cabernet", "sauvignon", "merlot", "rosé", "pinot", "malbec", "blend", "riesling"] },
+  { "type": "Liqueur/Aperitif", "keywords": ["liqueur", "aperitif", "cordial"] },
+  { "type": "Sake", "keywords": ["sake"] },
+  { "type": "Gin", "keywords": ["gin"] },
+  { "type": "RTD/Cocktail", "keywords": ["rtd", "ready to drink", "cocktail", "margarita", "martini", "old fashioned", "negroni", "manhattan", "long island", "pina colada"] },
+  { "type": "Beer", "keywords": ["beer", "lager", "ale", "ipa", "stout", "porter", "pilsner", "wheat", "saison", "gose", "bock", "kolsch", "hefeweizen", "pale ale", "craft beer", "microbrew"] },
+  { "type": "Cider", "keywords": ["cider", "hard cider", "apple cider"] },
+  { "type": "Hard Seltzer", "keywords": ["seltzer", "hard seltzer", "white claw", "truly", "high noon", "bon & viv", "vizzy", "press", "bud light seltzer"] },
+  { "type": "Flavored Malt Beverage", "keywords": ["mike's hard", "smirnoff ice", "twisted tea", "four loko", "seagram's escapes", "buzzballz"] },
+  { "type": "Non-Alcoholic Beer", "keywords": ["non-alcoholic beer", "n/a beer", "athletic brewing", "heineken 0.0", "o'doul's"] },
+  { "type": "Non-Alcoholic Wine", "keywords": ["non-alcoholic wine", "n/a wine", "dealcoholized wine", "fre wine"] },
+  { "type": "Coffee", "keywords": ["coffee", "cold brew", "espresso", "latte", "cappuccino", "nitro coffee", "iced coffee"] },
+  { "type": "Tea", "keywords": ["tea", "green tea", "black tea", "herbal tea", "chai", "matcha"] },
+  { "type": "Juice", "keywords": ["juice", "orange juice", "apple juice", "cranberry juice", "grape juice", "pineapple juice", "pomegranate juice", "smoothie", "naked juice", "bolthouse"] },
+  { "type": "Flavored Water", "keywords": ["flavored water", "hint", "propel", "smartwater", "vitaminwater", "aquafina", "dasani", "evian", "fiji", "voss"] },
+  { "type": "Protein Drink", "keywords": ["protein shake", "muscle milk", "premier protein", "ensure", "boost", "core power"] },
+  { "type": "Soda/Non-Alcoholic", "keywords": [
+    "coke", "coca-cola", "pepsi", "sprite", "fanta", "dr pepper", "mountain dew", "7up", "root beer", "ginger ale", "sierra mist", "rc cola", "sunkist", "crush", "barq's", "mug", "diet coke", "diet pepsi", "gatorade", "powerade", "red bull", "monster", "rockstar", "energy drink", "vitaminwater", "snapple", "arizona", "iced tea", "lemonade", "bai", "la croix", "polar", "topo chico", "perrier", "san pellegrino", "water", "club soda", "tonic", "schweppes", "canada dry", "fresca", "jarritos", "big red", "calypso", "capri sun", "hi-c", "minute maid", "simply", "ocean spray", "v8", "juicy juice", "tropicana", "welch's", "nestea", "brisk", "honest", "pure leaf", "starbucks", "frappuccino", "nesquik", "yoo-hoo", "milk", "chocolate milk", "almond milk", "soy milk", "oat milk"
+  ] }
+]

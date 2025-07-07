@@ -152,6 +152,24 @@ def fetch_all_products_with_paging(url, product_limit=PRODUCT_LIMIT):
     logger.debug(f'Exiting fetch_all_products_with_paging. Total products fetched: {len(all_products)}')
     return all_products
 
+ALCOHOL_TYPES_PATH = os.path.join(os.path.dirname(__file__), 'alcohol_types.json')
+ALCOHOL_TYPES_CACHE = None
+ALCOHOL_TYPES_CACHE_MTIME = 0
+
+def load_alcohol_types():
+    global ALCOHOL_TYPES_CACHE, ALCOHOL_TYPES_CACHE_MTIME
+    try:
+        mtime = os.path.getmtime(ALCOHOL_TYPES_PATH)
+        if ALCOHOL_TYPES_CACHE is None or mtime != ALCOHOL_TYPES_CACHE_MTIME:
+            with open(ALCOHOL_TYPES_PATH, 'r', encoding='utf-8') as f:
+                ALCOHOL_TYPES_CACHE = json.load(f)
+            ALCOHOL_TYPES_CACHE_MTIME = mtime
+            logger.debug(f'Reloaded alcohol_types.json with {len(ALCOHOL_TYPES_CACHE)} types (mtime={mtime})')
+    except Exception as e:
+        logger.error(f'Error loading alcohol_types.json: {e}')
+        ALCOHOL_TYPES_CACHE = []
+    return ALCOHOL_TYPES_CACHE
+
 def get_alcohol_type(product):
     # Lowercase all relevant fields for easier matching
     fields = [
@@ -161,37 +179,9 @@ def get_alcohol_type(product):
         ' '.join(product.get('tags', [])).lower()
     ]
     text = ' '.join(fields)
-
-    if 'bourbon' in text:
-        return 'Bourbon'
-    if 'scotch' in text:
-        return 'Scotch'
-    if 'whiskey' in text or 'whisky' in text:
-        return 'Whiskey'
-    if 'rye' in text:
-        return 'Whiskey'
-    if 'vodka' in text:
-        return 'Vodka'
-    if 'tequila' in text:
-        return 'Tequila'
-    if 'mezcal' in text:
-        return 'Mezcal'
-    if 'rum' in text:
-        return 'Rum'
-    if 'cognac' in text:
-        return 'Cognac'
-    if 'champagne' in text or 'sparkling' in text:
-        return 'Champagne/Sparkling Wine'
-    if any(w in text for w in ['wine', 'chardonnay', 'cabernet', 'sauvignon', 'merlot', 'rosé', 'pinot', 'malbec', 'blend', 'riesling']):
-        return 'Wine'
-    if 'liqueur' in text or 'aperitif' in text or 'cordial' in text:
-        return 'Liqueur/Aperitif'
-    if 'sake' in text:
-        return 'Sake'
-    if 'gin' in text:
-        return 'Gin'
-    if any(w in text for w in ['rtd', 'ready to drink', 'cocktail', 'margarita', 'martini', 'old fashioned', 'negroni', 'manhattan', 'long island', 'pina colada']):
-        return 'RTD/Cocktail'
+    for entry in load_alcohol_types():
+        if any(keyword in text for keyword in entry.get('keywords', [])):
+            return entry['type']
     return 'Other'
 
 def send_webhook(webhook_type, content=None, embed=None):
