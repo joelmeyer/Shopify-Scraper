@@ -1,10 +1,11 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, abort
 import sqlite3
 import os
 import json
 
-app = Flask(__name__)
-DB_PATH = os.path.join(os.path.dirname(__file__), 'data/products.db')  # Adjust if your DB is elsewhere
+app = Flask(__name__, static_folder='static', template_folder='templates')
+DB_PATH = os.path.join(os.path.dirname(__file__), '../data/products.db')  # Adjusted for new structure
+LOG_PATH = os.path.join(os.path.dirname(__file__), '../logs/scraper.log')
 
 def get_db_connection():
     conn = sqlite3.connect(DB_PATH)
@@ -60,6 +61,17 @@ def api_products():
         'page': page,
         'per_page': per_page
     })
+
+@app.route('/logs')
+def view_logs():
+    try:
+        with open(LOG_PATH, 'r', encoding='utf-8', errors='replace') as f:
+            log_content = f.read()[-100_000:]  # Show last 100k chars for performance
+    except FileNotFoundError:
+        log_content = 'Log file not found.'
+    except Exception as e:
+        log_content = f'Error reading log file: {e}'
+    return render_template('logs.html', log_content=log_content)
 
 if __name__ == '__main__':
     app.run(debug=True)

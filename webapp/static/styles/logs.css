@@ -1,0 +1,83 @@
+/* logs.css - styles for the /logs page */
+.log-container {
+    background: #fff;
+    color: #22223b;
+    font-family: "Fira Mono", "Consolas", "Menlo", monospace;
+    font-size: 15px;
+    border-radius: 8px;
+    padding: 18px;
+    margin: 32px auto 0 auto;
+    max-width: 1100px;
+    min-height: 400px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+}
+.log-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 18px;
+}
+.header-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+.header-link {
+    color: #4f8cff;
+    font-weight: 600;
+    text-decoration: none;
+    padding: 8px 18px;
+    border-radius: 5px;
+    border: 1px solid #4f8cff;
+    transition: background 0.2s;
+    background: none;
+    display: inline-block;
+}
+.header-link:hover {
+    background: #e3eaff;
+    text-decoration: underline;
+}
+.refresh-btn {
+    padding: 7px 18px;
+    border-radius: 5px;
+    border: none;
+    background: #4f8cff;
+    color: #fff;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+    margin-left: 0;
+}
+.refresh-btn:hover {
+    background: #2563eb;
+}
+.log-controls {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 12px;
+}
+.log-controls input[type="text"] {
+    padding: 6px 10px;
+    border-radius: 5px;
+    border: 1px solid #bfc7d1;
+    font-size: 15px;
+    width: 220px;
+}
+.log-controls label {
+    color: #22223b;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.log-status {
+    font-size: 13px;
+    color: #a3a3a3;
+}
+.log-content-wrapper {
+    overflow-x: auto;
+    max-height: 70vh;
+}

@@ -1,182 +1,9 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>All Products</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-        body {
-            font-family: 'Segoe UI', Arial, sans-serif;
-            background: #f7f7f9;
-            margin: 0;
-            padding: 0;
-        }
-        .container {
-            max-width: 1200px;
-            margin: 40px auto;
-            background: #fff;
-            border-radius: 10px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.07);
-            padding: 32px 24px 24px 24px;
-        }
-        h1 {
-            margin-top: 0;
-            color: #22223b;
-        }
-        .filters {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 12px;
-            margin-bottom: 18px;
-            align-items: center;
-        }
-        .filters input[type="text"],
-        .filters select {
-            padding: 7px 10px;
-            border-radius: 5px;
-            border: 1px solid #bfc7d1;
-            font-size: 15px;
-        }
-        .filters button {
-            padding: 7px 18px;
-            border-radius: 5px;
-            border: none;
-            background: #4f8cff;
-            color: #fff;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-        .filters button:hover {
-            background: #2563eb;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-        }
-        th, td {
-            padding: 12px 8px;
-            text-align: left;
-        }
-        th {
-            background: #4f8cff;
-            color: #fff;
-            font-weight: 600;
-            cursor: pointer;
-        }
-        tr:nth-child(even) {
-            background: #f2f6fc;
-        }
-        tr:hover {
-            background: #e3eaff;
-        }
-        .product-img {
-            width: 60px;
-            height: 60px;
-            object-fit: contain;
-            border-radius: 6px;
-            background: #f2f2f2;
-        }
-        .pagination {
-            display: flex;
-            justify-content: center;
-            gap: 8px;
-            margin-bottom: 16px;
-        }
-        .pagination a, .pagination span {
-            padding: 8px 14px;
-            border-radius: 5px;
-            background: #e9ecef;
-            color: #22223b;
-            text-decoration: none;
-            font-weight: 500;
-            transition: background 0.2s;
-        }
-        .pagination a:hover {
-            background: #4f8cff;
-            color: #fff;
-        }
-        .pagination .active {
-            background: #4f8cff;
-            color: #fff;
-            pointer-events: none;
-        }
-        @media (max-width: 900px) {
-            .container { padding: 10px; }
-            table, th, td { font-size: 14px; }
-            .product-img { width: 40px; height: 40px; }
-        }
-        @media (max-width: 600px) {
-            .filters { flex-direction: column; align-items: stretch; }
-            .filters input, .filters select, .filters button { width: 100%; margin-bottom: 6px; }
-            table, thead, tbody, th, td, tr { display: block; }
-            th, td { padding: 8px 4px; }
-            th { position: sticky; top: 0; }
-            .pagination { flex-direction: column; gap: 2px; }
-        }
-        .details-row td { border-top: none !important; }
-        .expand-btn { color: #444; }
-        .availability-yes {
-            color: #16a34a;
-            font-weight: bold;
-        }
-        .availability-no {
-            color: #dc2626;
-            font-weight: bold;
-        }
-    </style>
-</head>
-<body>
-<div class="container">
-    <div style="display:flex;justify-content:space-between;align-items:center;">
-        <h1>All Products</h1>
-        <button id="refreshBtn" style="padding:8px 18px;font-size:15px;">Refresh</button>
-    </div>
-    <div class="filters">
-        <input type="text" id="searchInput" placeholder="Search...">
-        <select id="vendorFilter"><option value="">All Vendors</option></select>
-        <select id="typeFilter"><option value="">All Types</option></select>
-        <select id="availableFilter">
-            <option value="">All</option>
-            <option value="1">Available</option>
-            <option value="0">Unavailable</option>
-        </select>
-        <select id="inputUrlFilter"><option value="">All Input URLs</option></select>
-        <button onclick="resetFilters()">Reset</button>
-    </div>
-    <div id="loading" style="display:none;text-align:center;margin:20px 0;font-size:18px;color:#4f8cff;">
-        Loading products...
-    </div>
-    <div id="errorMsg" style="display:none;text-align:center;margin:10px 0;color:#dc2626;font-weight:bold;"></div>
-    <div style="text-align:right;margin-bottom:10px;">
-        <button id="exportBtn" style="padding:7px 18px;font-size:15px;">Export CSV</button>
-    </div>
-    <table id="productsTable">
-        <thead>
-            <tr>
-                <th>Image</th>
-                <th onclick="sortTable('title')">Title</th>
-                <th onclick="sortTable('price')">Price</th>
-                <th onclick="sortTable('available')">Available</th>
-                <th onclick="sortTable('vendor')">Vendor</th>
-                <th onclick="sortTable('alcohol_type')">Alcohol Type</th>
-                <th onclick="sortTable('published_at')">Published At</th>
-                <th onclick="sortTable('updated_at')">Updated At</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody id="productsBody">
-        </tbody>
-    </table>
-    <div class="pagination" id="pagination"></div>
-</div>
-<script>
 let products = [];
 let filtered = [];
 let sortKey = 'id';
 let sortAsc = true;
 const perPage = 50;
-const backendChunkSize = 500;
+const backendChunkSize = 5000;
 let currentPage = 1;
 let totalPages = 1;
 let totalRecords = 0;
@@ -215,6 +42,42 @@ async function fetchProducts(page = 1, append = false) {
     } finally {
         document.getElementById('loading').style.display = 'none';
     }
+}
+
+function computeStats(list) {
+    const total = list.length;
+    const available = list.filter(p => p.available).length;
+    const vendors = [...new Set(list.map(p => p.vendor).filter(Boolean))];
+    const alcoholTypes = {};
+    list.forEach(p => {
+        if (p.alcohol_type) alcoholTypes[p.alcohol_type] = (alcoholTypes[p.alcohol_type]||0)+1;
+    });
+    const prices = list.map(p => parseFloat(p.price)).filter(x => !isNaN(x));
+    const minPrice = prices.length ? Math.min(...prices) : null;
+    const maxPrice = prices.length ? Math.max(...prices) : null;
+    const avgPrice = prices.length ? (prices.reduce((a,b)=>a+b,0)/prices.length) : null;
+    const vendorCounts = {};
+    list.forEach(p => { if (p.vendor) vendorCounts[p.vendor]=(vendorCounts[p.vendor]||0)+1; });
+    const mostPopularVendors = Object.entries(vendorCounts).sort((a,b)=>b[1]-a[1]).slice(0,3);
+    const lastUpdated = list.length ? list.map(p => p.updated_at).filter(Boolean).sort().reverse()[0] : null;
+    return {
+        total, available, vendors, alcoholTypes, minPrice, maxPrice, avgPrice, mostPopularVendors, lastUpdated
+    };
+}
+
+function renderStatsPanel() {
+    const stats = computeStats(filtered);
+    const allStats = computeStats(products);
+    let html = '';
+    html += `<div><b>Total Products:</b> ${allStats.total}</div>`;
+    html += `<div><b>Available:</b> ${allStats.available}</div>`;
+    html += `<div><b>Unique Vendors:</b> ${allStats.vendors.length}</div>`;
+    html += `<div><b>Last Updated:</b> ${allStats.lastUpdated ? formatDate(allStats.lastUpdated) : '-'}</div>`;
+    html += `<div><b>Alcohol Types:</b> ` + Object.entries(allStats.alcoholTypes).map(([k,v])=>`${k} (${v})`).join(', ') + `</div>`;
+    html += `<div><b>Price:</b> Min ${allStats.minPrice!==null?allStats.minPrice.toFixed(2):'-'}, Max ${allStats.maxPrice!==null?allStats.maxPrice.toFixed(2):'-'}, Avg ${allStats.avgPrice!==null?allStats.avgPrice.toFixed(2):'-'}</div>`;
+    html += `<div><b>Top Vendors:</b> ` + (allStats.mostPopularVendors.length ? allStats.mostPopularVendors.map(([v,c])=>`${v} (${c})`).join(', ') : '-') + `</div>`;
+    html += `<div><b>Showing:</b> ${filtered.length} of ${products.length} products</div>`;
+    document.getElementById('statsPanel').innerHTML = html;
 }
 
 function renderTable() {
@@ -275,6 +138,7 @@ function renderTable() {
             cell.textContent = d.toLocaleString();
         }
     });
+    renderStatsPanel();
 }
 
 function renderPagination() {
@@ -336,6 +200,7 @@ function filterTable() {
         return match;
     });
     sortTable(sortKey);
+    renderStats();
 }
 
 function resetFilters() {
@@ -369,6 +234,107 @@ function formatDate(dateStr) {
     return d.toLocaleString();
 }
 
+// --- State Persistence Helpers ---
+const STATE_KEY = 'shopifyScraperProductsStateV2';
+const PRODUCTS_KEY = 'shopifyScraperProductsDataV2';
+const PRODUCTS_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
+function saveState() {
+    const state = {
+        search: document.getElementById('searchInput').value,
+        vendor: document.getElementById('vendorFilter').value,
+        type: document.getElementById('typeFilter').value,
+        avail: document.getElementById('availableFilter').value,
+        inputUrl: document.getElementById('inputUrlFilter').value,
+        sortKey,
+        sortAsc,
+        currentPage
+    };
+    localStorage.setItem(STATE_KEY, JSON.stringify(state));
+}
+
+function loadState() {
+    const state = JSON.parse(localStorage.getItem(STATE_KEY) || '{}');
+    if (state.search !== undefined) document.getElementById('searchInput').value = state.search;
+    if (state.vendor !== undefined) document.getElementById('vendorFilter').value = state.vendor;
+    if (state.type !== undefined) document.getElementById('typeFilter').value = state.type;
+    if (state.avail !== undefined) document.getElementById('availableFilter').value = state.avail;
+    if (state.inputUrl !== undefined) document.getElementById('inputUrlFilter').value = state.inputUrl;
+    if (state.sortKey) sortKey = state.sortKey;
+    if (state.sortAsc !== undefined) sortAsc = state.sortAsc;
+    if (state.currentPage) currentPage = state.currentPage;
+}
+
+function saveProductsToCache() {
+    const cache = {
+        products,
+        totalRecords,
+        timestamp: Date.now(),
+        version: 2
+    };
+    localStorage.setItem(PRODUCTS_KEY, JSON.stringify(cache));
+}
+
+function loadProductsFromCache() {
+    const cache = JSON.parse(localStorage.getItem(PRODUCTS_KEY) || 'null');
+    if (!cache || !cache.products || !cache.timestamp) return false;
+    if (Date.now() - cache.timestamp > PRODUCTS_CACHE_TTL) return false;
+    products = cache.products;
+    totalRecords = cache.totalRecords || products.length;
+    allDataLoaded = true;
+    filtered = [...products];
+    totalPages = Math.ceil(totalRecords / perPage) || 1;
+    return true;
+}
+
+// --- Patch event handlers to save state ---
+['searchInput','vendorFilter','typeFilter','availableFilter','inputUrlFilter'].forEach(id => {
+    document.getElementById(id).addEventListener('change', saveState);
+    document.getElementById(id).addEventListener('input', saveState);
+});
+
+// Patch sortTable and pagination to save state
+const origSortTable = sortTable;
+sortTable = function(key) {
+    origSortTable(key);
+    saveState();
+};
+
+const origRenderPagination = renderPagination;
+renderPagination = function() {
+    origRenderPagination();
+    // Patch page buttons to save state
+    document.querySelectorAll('#pagination a').forEach(a => {
+        a.addEventListener('click', () => {
+            saveState();
+        });
+    });
+};
+
+// --- Patch fetchProducts to save products to cache ---
+const origFetchProducts = fetchProducts;
+fetchProducts = async function(page = 1, append = false) {
+    await origFetchProducts(page, append);
+    if (allDataLoaded) saveProductsToCache();
+};
+
+// --- On page load, restore state and products ---
+document.addEventListener('DOMContentLoaded', function() {
+    let usedCache = false;
+    if (loadProductsFromCache()) {
+        usedCache = true;
+        populateFilters();
+        loadState();
+        filterTable();
+        renderPagination();
+        renderStats();
+        renderTable();
+    } else {
+        origFetchProducts(currentPage);
+        loadState();
+        renderStats();
+    }
+});
 document.getElementById('searchInput').addEventListener('input', filterTable);
 document.getElementById('vendorFilter').addEventListener('change', filterTable);
 document.getElementById('typeFilter').addEventListener('change', filterTable);
@@ -376,6 +342,7 @@ document.getElementById('availableFilter').addEventListener('change', filterTabl
 document.getElementById('inputUrlFilter').addEventListener('change', filterTable);
 window.onload = function() {
     fetchProducts(currentPage);
+    renderStats();
 };
 document.getElementById('refreshBtn').onclick = async function() {
     products = [];
@@ -385,6 +352,7 @@ document.getElementById('refreshBtn').onclick = async function() {
     renderTable();
     populateFilters();
     renderPagination();
+    renderStats();
 };
 function exportCSV() {
     let csv = '';
@@ -413,6 +381,51 @@ function exportCSV() {
     URL.revokeObjectURL(url);
 }
 document.getElementById('exportBtn').onclick = exportCSV;
-</script>
-</body>
-</html>
+function renderStats() {
+    // Compute stats from filtered and all products
+    const total = products.length;
+    const filteredCount = filtered.length;
+    const available = filtered.filter(p => p.available).length;
+    const totalAvailable = products.filter(p => p.available).length;
+    const vendors = [...new Set(filtered.map(p => p.vendor).filter(Boolean))];
+    const allVendors = [...new Set(products.map(p => p.vendor).filter(Boolean))];
+    const alcoholTypes = {};
+    filtered.forEach(p => {
+        if (p.alcohol_type) alcoholTypes[p.alcohol_type] = (alcoholTypes[p.alcohol_type]||0)+1;
+    });
+    const prices = filtered.map(p => parseFloat(p.price)).filter(x => !isNaN(x));
+    const minPrice = prices.length ? Math.min(...prices) : '';
+    const maxPrice = prices.length ? Math.max(...prices) : '';
+    const avgPrice = prices.length ? (prices.reduce((a,b)=>a+b,0)/prices.length).toFixed(2) : '';
+    // Top vendors
+    const vendorCounts = {};
+    filtered.forEach(p => { if (p.vendor) vendorCounts[p.vendor] = (vendorCounts[p.vendor]||0)+1; });
+    const topVendors = Object.entries(vendorCounts).sort((a,b)=>b[1]-a[1]).slice(0,3);
+    // Last updated (most recent updated_at or last_seen)
+    let lastUpdated = '';
+    if (filtered.length) {
+        const dates = filtered.map(p => p.updated_at || p.last_seen).filter(Boolean);
+        if (dates.length) {
+            lastUpdated = new Date(Math.max(...dates.map(d=>+new Date(d))));
+            lastUpdated = lastUpdated.toLocaleString();
+        }
+    }
+    // Active filters summary
+    const filterSummary = [];
+    if (document.getElementById('searchInput').value) filterSummary.push('Search: "'+document.getElementById('searchInput').value+'"');
+    if (document.getElementById('vendorFilter').value) filterSummary.push('Vendor: '+document.getElementById('vendorFilter').value);
+    if (document.getElementById('typeFilter').value) filterSummary.push('Type: '+document.getElementById('typeFilter').value);
+    if (document.getElementById('availableFilter').value) filterSummary.push('Available: '+(document.getElementById('availableFilter').value==='1'?'Yes':'No'));
+    if (document.getElementById('inputUrlFilter').value) filterSummary.push('Input URL: '+document.getElementById('inputUrlFilter').value);
+    // Render
+    let html = '';
+    html += `<div><b>Total Products:</b> ${filteredCount} <span style="color:#888;font-size:13px;">/ ${total}</span></div>`;
+    html += `<div><b>Available:</b> ${available} <span style="color:#888;font-size:13px;">/ ${totalAvailable}</span></div>`;
+    html += `<div><b>Unique Vendors:</b> ${vendors.length} <span style="color:#888;font-size:13px;">/ ${allVendors.length}</span></div>`;
+    html += `<div><b>Last Updated:</b> ${lastUpdated||'-'}</div>`;
+    html += `<div><b>Alcohol Types:</b> ${Object.keys(alcoholTypes).length ? Object.entries(alcoholTypes).map(([k,v])=>`${k} (${v})`).join(', ') : '-'}</div>`;
+    html += `<div><b>Price:</b> ${prices.length ? `min $${minPrice} / avg $${avgPrice} / max $${maxPrice}` : '-'}`;
+    html += `<div><b>Top Vendors:</b> ${topVendors.length ? topVendors.map(([v,c])=>`${v} (${c})`).join(', ') : '-'}</div>`;
+    if (filterSummary.length) html += `<div style="color:#2563eb;"><b>Active Filters:</b> ${filterSummary.join('; ')}</div>`;
+    document.getElementById('statsPanel').innerHTML = html;
+}

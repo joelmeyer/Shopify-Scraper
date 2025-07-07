@@ -1,0 +1,16 @@
+# Dockerfile.web - Web app only
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY webapp/ webapp/
+
+ENV FLASK_APP=webapp/web_ui.py
+ENV FLASK_RUN_HOST=0.0.0.0
+
+EXPOSE 5000
+
+CMD ["flask", "run", "--host=0.0.0.0"]
