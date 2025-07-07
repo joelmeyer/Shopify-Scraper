@@ -72,10 +72,11 @@ def getProxies():
     logger.debug(f'Loaded {len(proxy)} proxies')
     return proxy
     
-def fetch_all_products_with_paging(url, product_limit=PRODUCT_LIMIT):
+def fetch_all_products_with_paging(url, product_limit=PRODUCT_LIMIT, max_errors=3):
     """
     Fetch all products from a Shopify store using paging, with advanced anti-bot and error handling logic.
     Adds a random jitter between successful requests and uses a requests.Session for cookie and connection reuse.
+    If too many errors occur, aborts and returns what was fetched so far.
     """
     logger.debug(f'Fetching all products with paging for url: {url}')
     proxy_list = getProxies()
@@ -85,6 +86,7 @@ def fetch_all_products_with_paging(url, product_limit=PRODUCT_LIMIT):
     site_429_count = 0
     max_429_skip = 5  # After this many 429s, skip site for 30 min
     session = requests.Session()  # Use a session for cookies and connection reuse
+    error_count = 0
     while len(all_products) < product_limit:
         url_1 = f"{url}products.json?limit={per_page}&page={page}"
         condition = True
@@ -120,22 +122,38 @@ def fetch_all_products_with_paging(url, product_limit=PRODUCT_LIMIT):
                         logger.debug(f'Backing off for {backoff} seconds (exponential, with jitter)')
                         time.sleep(backoff + random.randint(0, JITTER))
                         backoff = min(backoff * 2, 1800)
+                    error_count += 1
+                    if error_count >= max_errors:
+                        logger.error(f'Maximum error count ({max_errors}) reached in fetch_all_products_with_paging. Aborting.')
+                        return all_products
                     continue
                 elif webpage.status_code != 200:
                     logger.error(f'Non-200 response {webpage.status_code} for {url_1}: {webpage.text[:200]}')
                     time.sleep(random.randint(MIN_SLEEP, MAX_SLEEP))
+                    error_count += 1
+                    if error_count >= max_errors:
+                        logger.error(f'Maximum error count ({max_errors}) reached in fetch_all_products_with_paging. Aborting.')
+                        return all_products
                     continue
                 try:
                     products = json.loads((webpage.text))['products']
                 except Exception as e:
                     logger.error(f'JSON decode error for {url_1}: {e}\nResponse: {webpage.text[:200]}')
                     time.sleep(random.randint(MIN_SLEEP, MAX_SLEEP))
+                    error_count += 1
+                    if error_count >= max_errors:
+                        logger.error(f'Maximum error count ({max_errors}) reached in fetch_all_products_with_paging. Aborting.')
+                        return all_products
                     continue
                 logger.debug(f'Successfully fetched {len(products)} products (page {page})')
                 condition = False
             except Exception as e:
                 logger.error(f'Error getting products (page {page})(url {url_1}): {e}\n Sleeping 3 minutes...')
                 time.sleep(random.randint(MIN_SLEEP, MAX_SLEEP))
+                error_count += 1
+                if error_count >= max_errors:
+                    logger.error(f'Maximum error count ({max_errors}) reached in fetch_all_products_with_paging. Aborting.')
+                    return all_products
                 continue
         if not products:
             logger.debug(f'No more products returned at page {page}. Stopping.')
@@ -437,24 +455,25 @@ def Main(url):
             time.sleep(5)
             loop_exceptions += 1
             continue
-logger.info('SScraper 1.0')
-#choice = input('Enter any key to initialize scraper$* (Press \'Q\' to quit) ')
-#choice = (choice.lower())
-#if choice == ('q'):
-#    exit()
-     
-# Grab links from text file to initialize threads.
-urls = [u.strip() for u in SHOPIFY_URLS if u.strip()]
+if __name__ == "__main__":
+    logger.info('SScraper 1.0')
+    #choice = input('Enter any key to initialize scraper$* (Press \'Q\' to quit) ')
+    #choice = (choice.lower())
+    #if choice == ('q'):
+    #    exit()
+         
+    # Grab links from text file to initialize threads.
+    urls = [u.strip() for u in SHOPIFY_URLS if u.strip()]
 
-# Initializes threads to monitor multiple websites at once.
-for x in range(len(urls)):
-    logger.debug(f'Initializing threads for url: {urls[x]}')
-    #proxy_threads = threading.Thread(target=getProxies, name='getProxy Thread {}'.format(x))
-    #content_threads = threading.Thread(target=getContent, name='getContent Thread {}'.format(x), args= (urls[x],))
-    #product_threads = threading.Thread(target=getProducts, name='getProduct Thread {}'.format(x), args= (urls[x],))
-    main_threads = threading.Thread(target=Main, name='Main Thread {}'.format(x), args= (urls[x],))
-    #content_threads.start()
-    #product_threads.start()
-    main_threads.start()
-    logger.debug(f'{main_threads.name} initialized')
-send_error_webhook(f'SScraper 1.0 initialized with {len(urls)} URLs')
+    # Initializes threads to monitor multiple websites at once.
+    for x in range(len(urls)):
+        logger.debug(f'Initializing threads for url: {urls[x]}')
+        #proxy_threads = threading.Thread(target=getProxies, name='getProxy Thread {}'.format(x))
+        #content_threads = threading.Thread(target=getContent, name='getContent Thread {}'.format(x), args= (urls[x],))
+        #product_threads = threading.Thread(target=getProducts, name='getProduct Thread {}'.format(x), args= (urls[x],))
+        main_threads = threading.Thread(target=Main, name='Main Thread {}'.format(x), args= (urls[x],))
+        #content_threads.start()
+        #product_threads.start()
+        main_threads.start()
+        logger.debug(f'{main_threads.name} initialized')
+    send_error_webhook(f'SScraper 1.0 initialized with {len(urls)} URLs')
