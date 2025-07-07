@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Scraper Logs</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles/base.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles/logs.css') }}">
+</head>
+<body>
+<div class="log-container">
+    <div class="log-header">
+        <h1>Scraper Logs</h1>
+        <div class="header-actions">
+            <a href="/" class="header-link">&#8592; Back to Products</a>
+            <button class="refresh-btn" onclick="window.location.reload()">Refresh</button>
+        </div>
+    </div>
+    <div class="log-controls">
+        <input type="text" id="logSearch" placeholder="Search logs...">
+        <label><input type="checkbox" id="autoRefresh"> Auto-refresh</label>
+        <span id="logStatus" class="log-status"></span>
+    </div>
+    <div class="log-content-wrapper">
+        <pre id="logContent">{{ log_content }}</pre>
+    </div>
+</div>
+<script src="{{ url_for('static', filename='js/logs.js') }}"></script>
+</body>
+</html>

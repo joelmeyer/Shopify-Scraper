@@ -3,7 +3,7 @@ let filtered = [];
 let sortKey = 'id';
 let sortAsc = true;
 const perPage = 50;
-const backendChunkSize = 500;
+const backendChunkSize = 5000;
 let currentPage = 1;
 let totalPages = 1;
 let totalRecords = 0;
@@ -234,6 +234,107 @@ function formatDate(dateStr) {
     return d.toLocaleString();
 }
 
+// --- State Persistence Helpers ---
+const STATE_KEY = 'shopifyScraperProductsStateV2';
+const PRODUCTS_KEY = 'shopifyScraperProductsDataV2';
+const PRODUCTS_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
+function saveState() {
+    const state = {
+        search: document.getElementById('searchInput').value,
+        vendor: document.getElementById('vendorFilter').value,
+        type: document.getElementById('typeFilter').value,
+        avail: document.getElementById('availableFilter').value,
+        inputUrl: document.getElementById('inputUrlFilter').value,
+        sortKey,
+        sortAsc,
+        currentPage
+    };
+    localStorage.setItem(STATE_KEY, JSON.stringify(state));
+}
+
+function loadState() {
+    const state = JSON.parse(localStorage.getItem(STATE_KEY) || '{}');
+    if (state.search !== undefined) document.getElementById('searchInput').value = state.search;
+    if (state.vendor !== undefined) document.getElementById('vendorFilter').value = state.vendor;
+    if (state.type !== undefined) document.getElementById('typeFilter').value = state.type;
+    if (state.avail !== undefined) document.getElementById('availableFilter').value = state.avail;
+    if (state.inputUrl !== undefined) document.getElementById('inputUrlFilter').value = state.inputUrl;
+    if (state.sortKey) sortKey = state.sortKey;
+    if (state.sortAsc !== undefined) sortAsc = state.sortAsc;
+    if (state.currentPage) currentPage = state.currentPage;
+}
+
+function saveProductsToCache() {
+    const cache = {
+        products,
+        totalRecords,
+        timestamp: Date.now(),
+        version: 2
+    };
+    localStorage.setItem(PRODUCTS_KEY, JSON.stringify(cache));
+}
+
+function loadProductsFromCache() {
+    const cache = JSON.parse(localStorage.getItem(PRODUCTS_KEY) || 'null');
+    if (!cache || !cache.products || !cache.timestamp) return false;
+    if (Date.now() - cache.timestamp > PRODUCTS_CACHE_TTL) return false;
+    products = cache.products;
+    totalRecords = cache.totalRecords || products.length;
+    allDataLoaded = true;
+    filtered = [...products];
+    totalPages = Math.ceil(totalRecords / perPage) || 1;
+    return true;
+}
+
+// --- Patch event handlers to save state ---
+['searchInput','vendorFilter','typeFilter','availableFilter','inputUrlFilter'].forEach(id => {
+    document.getElementById(id).addEventListener('change', saveState);
+    document.getElementById(id).addEventListener('input', saveState);
+});
+
+// Patch sortTable and pagination to save state
+const origSortTable = sortTable;
+sortTable = function(key) {
+    origSortTable(key);
+    saveState();
+};
+
+const origRenderPagination = renderPagination;
+renderPagination = function() {
+    origRenderPagination();
+    // Patch page buttons to save state
+    document.querySelectorAll('#pagination a').forEach(a => {
+        a.addEventListener('click', () => {
+            saveState();
+        });
+    });
+};
+
+// --- Patch fetchProducts to save products to cache ---
+const origFetchProducts = fetchProducts;
+fetchProducts = async function(page = 1, append = false) {
+    await origFetchProducts(page, append);
+    if (allDataLoaded) saveProductsToCache();
+};
+
+// --- On page load, restore state and products ---
+document.addEventListener('DOMContentLoaded', function() {
+    let usedCache = false;
+    if (loadProductsFromCache()) {
+        usedCache = true;
+        populateFilters();
+        loadState();
+        filterTable();
+        renderPagination();
+        renderStats();
+        renderTable();
+    } else {
+        origFetchProducts(currentPage);
+        loadState();
+        renderStats();
+    }
+});
 document.getElementById('searchInput').addEventListener('input', filterTable);
 document.getElementById('vendorFilter').addEventListener('change', filterTable);
 document.getElementById('typeFilter').addEventListener('change', filterTable);

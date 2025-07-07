@@ -128,3 +128,9 @@ tr:hover {
     border-radius:8px;
     align-items:flex-start;
 }
+/* products.css - styles for the products page */
+.products-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
