@@ -23,6 +23,7 @@ PROXIES = [p for p in os.getenv('PROXIES', '').split(',') if p]
 NOTIFY_WEBHOOK = os.getenv('NOTIFY_WEBHOOK', '')
 ERROR_WEBHOOK = os.getenv('ERROR_WEBHOOK', '')
 PRODUCT_LIMIT = int(os.getenv('PRODUCT_LIMIT', '200'))
+PRICE_DROP_THRESHOLD = float(os.getenv('PRICE_DROP_THRESHOLD', '0.1'))  # Default 10% drop
 
 # Advanced anti-bot constants
 USER_AGENTS = [
@@ -225,7 +226,7 @@ def send_webhook(webhook_type, content=None, embed=None):
 def send_webhook_notification(product, url, event_type):
     """
     Send a Discord webhook notification for product events.
-    event_type: 'available', 'unavailable', or 'new'
+    event_type: 'available', 'unavailable', 'new', or 'price_reduced'
     """
     handle = product['handle']
     title = product.get('title', 'Unknown Product')
@@ -252,6 +253,11 @@ def send_webhook_notification(product, url, event_type):
     elif event_type == 'new':
         description = '***New product found!***'
         color = 0x1e0f3
+    elif event_type == 'price_reduced':
+        drop_amt = product.get('price_drop_amount')
+        drop_pct = product.get('price_drop_percent')
+        description = f'***Product price reduced!***\nDrop: ${drop_amt:.2f} ({drop_pct:.1f}%)'
+        color = 0x2563eb
     else:
         description = '***Product update***'
         color = 0xcccccc
@@ -325,10 +331,11 @@ def init_db():
 def load_product_availability(input_url):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute('SELECT id, available FROM products WHERE input_url = ?', (input_url,))
+    c.execute('SELECT id, available, price FROM products WHERE input_url = ?', (input_url,))
     rows = c.fetchall()
     conn.close()
-    return {id_: bool(available) for id_, available in rows}
+    # Return a dict: id -> {'available': bool, 'price': float or None}
+    return {id_: {'available': bool(available), 'price': float(price) if price is not None else None} for id_, available, price in rows}
 
 def update_product_in_db(id_val, handle, title, available, product, url):
     with db_lock:
@@ -422,7 +429,19 @@ def Main(url):
                 available = False
                 if product.get('variants') and len(product['variants']) > 0:
                     available = product['variants'][0].get('available', False)
-                prev_available = product_availability.get(id_val)
+                # --- Price drop notification logic ---
+                price = 0.0
+                try:
+                    price = float(product['variants'][0]['price']) if product.get('variants') and len(product['variants']) > 0 else 0.0
+                except Exception:
+                    price = 0.0
+                prev_price = None
+                prev_available = None
+                prev_info = product_availability.get(id_val)
+                if prev_info is not None:
+                    prev_available = prev_info.get('available')
+                    prev_price = prev_info.get('price')
+                # --- End price drop logic ---
                 if prev_available is not None and not prev_available and available:
                     logger.debug(f'Product became available: {product["title"]} ({handle})')
                     new_products.append(id_val)
@@ -442,8 +461,16 @@ def Main(url):
                     # Only Send a webhook notification if DB has been initialized and we haven't sent 5 notifications already
                     if init_product_count > 0 and brandnewproducts <= 15:
                         send_webhook_notification(product, url, 'new')
+                elif prev_price is not None and price < prev_price:
+                    percent_drop = (prev_price - price) / prev_price
+                    if percent_drop >= PRICE_DROP_THRESHOLD:
+                        logger.debug(f'Product price reduced: {product["title"]} ({handle}) {prev_price} -> {price} ({percent_drop*100:.1f}% drop)')
+                        # Add price drop info to product for notification
+                        product['price_drop_amount'] = prev_price - price
+                        product['price_drop_percent'] = percent_drop * 100
+                        send_webhook_notification(product, url, 'price_reduced')
                 # Update the tracked availability in memory and DB
-                product_availability[id_val] = available
+                product_availability[id_val] = {'available': available, 'price': price}
                 update_product_in_db(id_val, handle, title, available, product, url)
             # --- End availability check ---
             logger.debug(f'Scraping target$* {url} new/changed products: {len(new_products)}')
