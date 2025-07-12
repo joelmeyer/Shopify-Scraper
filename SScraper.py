@@ -324,6 +324,7 @@ def init_db():
         try:
             c.execute("ALTER TABLE products ADD COLUMN date_added TEXT DEFAULT (datetime('now'))")
         except Exception:
+            logger.error('Error adding date_added column to products table')
             pass
     conn.commit()
     conn.close()
