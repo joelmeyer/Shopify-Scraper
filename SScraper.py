@@ -286,48 +286,49 @@ def column_exists(cursor, table, column):
     return any(row[1] == column for row in cursor.fetchall())
 
 def init_db():
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    # Add columns if they do not exist
-    c.execute('''CREATE TABLE IF NOT EXISTS products (
-        id INTEGER,
-        handle TEXT,
-        title TEXT,
-        available INTEGER,
-        last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        published_at TEXT,  -- ISO date string
-        created_at TEXT,    -- ISO date string
-        updated_at TEXT,    -- ISO date string
-        vendor TEXT,
-        url TEXT,
-        price TEXT,
-        original_json TEXT,
-        input_url TEXT,
-        alcohol_type TEXT,
-        became_available_at TEXT,
-        became_unavailable_at TEXT,
-        date_added TEXT DEFAULT (datetime('now')),
-        PRIMARY KEY (id, input_url)
-    )''')
-    # Add columns if missing (for migrations)
-    if not column_exists(c, 'products', 'became_available_at'):
-        try:
-            c.execute('ALTER TABLE products ADD COLUMN became_available_at TEXT')
-        except Exception:
-            pass
-    if not column_exists(c, 'products', 'became_unavailable_at'):
-        try:
-            c.execute('ALTER TABLE products ADD COLUMN became_unavailable_at TEXT')
-        except Exception:
-            pass
-    if not column_exists(c, 'products', 'date_added'):
-        try:
-            c.execute("ALTER TABLE products ADD COLUMN date_added TEXT DEFAULT (datetime('now'))")
-        except Exception:
-            logger.error('Error adding date_added column to products table')
-            pass
-    conn.commit()
-    conn.close()
+    with db_lock:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        # Add columns if they do not exist
+        c.execute('''CREATE TABLE IF NOT EXISTS products (
+            id INTEGER,
+            handle TEXT,
+            title TEXT,
+            available INTEGER,
+            last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            published_at TEXT,  -- ISO date string
+            created_at TEXT,    -- ISO date string
+            updated_at TEXT,    -- ISO date string
+            vendor TEXT,
+            url TEXT,
+            price TEXT,
+            original_json TEXT,
+            input_url TEXT,
+            alcohol_type TEXT,
+            became_available_at TEXT,
+            became_unavailable_at TEXT,
+            date_added TEXT DEFAULT (datetime('now')),
+            PRIMARY KEY (id, input_url)
+        )''')
+        # Add columns if missing (for migrations)
+        if not column_exists(c, 'products', 'became_available_at'):
+            try:
+                c.execute('ALTER TABLE products ADD COLUMN became_available_at TEXT')
+            except Exception:
+                pass
+        if not column_exists(c, 'products', 'became_unavailable_at'):
+            try:
+                c.execute('ALTER TABLE products ADD COLUMN became_unavailable_at TEXT')
+            except Exception:
+                pass
+        if not column_exists(c, 'products', 'date_added'):
+            try:
+                c.execute("ALTER TABLE products ADD COLUMN date_added TEXT DEFAULT (datetime('now'))")
+            except Exception as e:
+                logger.error(f'Error adding date_added column to products table {e}')
+                pass
+        conn.commit()
+        conn.close()
 
 def load_product_availability(input_url):
     conn = sqlite3.connect(DB_PATH)
