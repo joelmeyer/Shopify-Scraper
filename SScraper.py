@@ -323,7 +323,8 @@ def init_db():
                 pass
         if not column_exists(c, 'products', 'date_added'):
             try:
-                c.execute("ALTER TABLE products ADD COLUMN date_added TEXT DEFAULT (datetime('now'))")
+                # SQLite does not allow non-constant defaults in ALTER TABLE, so add without default
+                c.execute("ALTER TABLE products ADD COLUMN date_added TEXT")
             except Exception as e:
                 logger.error(f'Error adding date_added column to products table {e}')
                 pass
