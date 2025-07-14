@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Shopify Scraper</title>
+    <link rel="stylesheet" href="/static/styles/base.css">
+</head>
+<body>
+    <nav style="background:#222; color:#fff; padding:10px 0; margin-bottom:20px;">
+        <div style="max-width:900px; margin:0 auto; display:flex; gap:20px; align-items:center;">
+            <a href="/products" style="color:#fff; text-decoration:none; font-weight:bold;">Products</a>
+            <a href="/logs" style="color:#fff; text-decoration:none;">Logs</a>
+            <a href="/settings" style="color:#fff; text-decoration:none;">Settings</a>
+        </div>
+    </nav>
+    <div style="max-width:900px; margin:0 auto;">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            <ul class="flashes">
+            {% for category, message in messages %}
+              <li class="{{ category }}">{{ message }}</li>
+            {% endfor %}
+            </ul>
+          {% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>

@@ -1,0 +1,66 @@
+/* Settings page styles */
+.settings-section {
+  background: #f8fafc;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px #0001;
+  padding: 28px 32px 24px 32px;
+  margin-bottom: 32px;
+  max-width: 700px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.settings-section h3 {
+  margin-top: 0;
+  color: #2563eb;
+}
+#env-fields label {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+  font-size: 1.08em;
+}
+#env-fields input[type="text"] {
+  margin-left: 10px;
+  padding: 7px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  font-size: 1em;
+  width: 320px;
+  background: #fff;
+  transition: border 0.2s;
+}
+#env-fields input[type="text"]:focus {
+  border: 1.5px solid #2563eb;
+  outline: none;
+}
+button[type="submit"] {
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 9px 22px;
+  font-size: 1.08em;
+  margin-top: 10px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+button[type="submit"]:hover {
+  background: #1746a0;
+}
+#alcohol-types-form textarea {
+  width: 100%;
+  min-height: 320px;
+  font-family: monospace;
+  font-size: 1em;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  padding: 10px;
+  background: #fff;
+  margin-bottom: 10px;
+  resize: vertical;
+}
+@media (max-width: 700px) {
+  .settings-section { padding: 12px 5vw; }
+  #alcohol-types-form textarea { min-height: 180px; }
+  #env-fields input[type="text"] { width: 100%; }
+}

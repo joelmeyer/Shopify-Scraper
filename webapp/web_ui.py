@@ -1,11 +1,15 @@
-from flask import Flask, render_template, request, jsonify, abort
+from flask import Flask, render_template, request, jsonify, abort, redirect, url_for, flash
 import sqlite3
 import os
 import json
+from dotenv import dotenv_values, set_key
+import subprocess
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
 DB_PATH = os.path.join(os.path.dirname(__file__), '../data/products.db')  # Adjusted for new structure
 LOG_PATH = os.path.join(os.path.dirname(__file__), '../logs/scraper.log')
+SETTINGS_ENV_PATH = os.path.join(os.path.dirname(__file__), '../.env')
+ALCOHOL_TYPES_PATH = os.path.join(os.path.dirname(__file__), '../alcohol_types.json')
 
 def get_db_connection():
     conn = sqlite3.connect(DB_PATH)
@@ -164,6 +168,57 @@ def view_logs():
     except Exception as e:
         log_content = f'Error reading log file: {e}'
     return render_template('logs.html', log_content=log_content)
+
+@app.route('/settings', methods=['GET'])
+def settings():
+    # Load .env
+    env_vars = dotenv_values(SETTINGS_ENV_PATH)
+    # Load alcohol_types.json
+    try:
+        with open(ALCOHOL_TYPES_PATH, 'r', encoding='utf-8') as f:
+            alcohol_types_json = f.read()
+    except Exception as e:
+        alcohol_types_json = ''
+        flash(f'Error loading alcohol_types.json: {e}', 'error')
+    return render_template('settings.html', env_vars=env_vars, alcohol_types_json=alcohol_types_json)
+
+@app.route('/settings/env', methods=['POST'])
+def update_env():
+    env_vars = request.form.to_dict()
+    # Update .env file
+    for key, value in env_vars.items():
+        set_key(SETTINGS_ENV_PATH, key, value)
+    flash('Environment variables updated.', 'success')
+    return redirect(url_for('settings'))
+
+@app.route('/settings/alcohol_types', methods=['POST'])
+def update_alcohol_types():
+    alcohol_types_json = request.form.get('alcohol_types_json', '')
+    try:
+        # Validate JSON
+        parsed = json.loads(alcohol_types_json)
+        with open(ALCOHOL_TYPES_PATH, 'w', encoding='utf-8') as f:
+            f.write(json.dumps(parsed, indent=2))
+        flash('alcohol_types.json updated.', 'success')
+    except Exception as e:
+        flash(f'Error updating alcohol_types.json: {e}', 'error')
+    return redirect(url_for('settings'))
+
+@app.route('/restart', methods=['POST'])
+def restart_app():
+    try:
+        # Try supervisor first
+        result = subprocess.run(['supervisorctl', 'restart', 'scraper'], capture_output=True, text=True)
+        if result.returncode != 0:
+            # Fallback to systemctl if supervisor fails
+            result = subprocess.run(['systemctl', 'restart', 'scraper'], capture_output=True, text=True)
+        if result.returncode == 0:
+            flash('Scraper restart command sent successfully.', 'success')
+        else:
+            flash(f'Failed to restart scraper: {result.stderr}', 'error')
+    except Exception as e:
+        flash(f'Error attempting to restart scraper: {e}', 'error')
+    return redirect(url_for('settings'))
 
 if __name__ == '__main__':
     app.run(debug=True)

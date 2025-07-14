@@ -7,6 +7,8 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='styles/logs.css') }}">
 </head>
 <body>
+{% extends "base.html" %}
+{% block content %}
 <div class="log-container">
     <div class="log-header">
         <h1>Scraper Logs</h1>
@@ -25,5 +27,6 @@
     </div>
 </div>
 <script src="{{ url_for('static', filename='js/logs.js') }}"></script>
+{% endblock %}
 </body>
 </html>
