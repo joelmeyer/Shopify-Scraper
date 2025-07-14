@@ -18,12 +18,7 @@ load_dotenv()
 URL_PATH = 'products.json?limit=200&page=1'
 DB_PATH = 'data/products.db'
 
-SHOPIFY_URLS = os.getenv('SHOPIFY_URLS', '').split(',')
-PROXIES = [p for p in os.getenv('PROXIES', '').split(',') if p]
-NOTIFY_WEBHOOK = os.getenv('NOTIFY_WEBHOOK', '')
-ERROR_WEBHOOK = os.getenv('ERROR_WEBHOOK', '')
-PRODUCT_LIMIT = int(os.getenv('PRODUCT_LIMIT', '200'))
-PRICE_DROP_THRESHOLD = float(os.getenv('PRICE_DROP_THRESHOLD', '0.1'))  # Default 10% drop
+SHOPIFY_URLS = os.getenv('SHOPIFY_URLS', '').replace('\n', ',').split(',')
 
 # Advanced anti-bot constants
 USER_AGENTS = [
@@ -66,25 +61,18 @@ logger.addHandler(console_handler)
 
 db_lock = threading.Lock()
 
-def getProxies():
-    logger.debug('Entering getProxies')
-    # Use proxies from env
-    proxy = PROXIES.copy()
-    logger.debug(f'Loaded {len(proxy)} proxies')
-    return proxy
-    
-def fetch_all_products_with_paging(url, product_limit=PRODUCT_LIMIT, max_errors=3):
+def fetch_all_products_with_paging(url, proxies, product_limit, max_errors=3):
     """
     Fetch all products from a Shopify store using paging, with advanced anti-bot and error handling logic.
     Adds a random jitter between successful requests and uses a requests.Session for cookie and connection reuse.
     If too many errors occur, aborts and returns what was fetched so far.
     """
     logger.debug(f'Fetching all products with paging for url: {url}')
-    proxy_list = getProxies()
+    proxy_list = proxies.copy()
     all_products = []
     page = 1
     per_page = 200
-    site_429_count = 0
+    site_429_count = 0  # Too many requests counter
     max_429_skip = 5  # After this many 429s, skip site for 30 min
     session = requests.Session()  # Use a session for cookies and connection reuse
     error_count = 0
@@ -203,27 +191,30 @@ def get_alcohol_type(product):
             return entry['type']
     return 'Other'
 
-def send_webhook(webhook_type, content=None, embed=None):
+def send_webhook(webhook_type, notify_webhook, error_webhook, content=None, embed=None):
     if webhook_type == 'notify':
-        wh_url = NOTIFY_WEBHOOK
+        wh_urls = notify_webhook if isinstance(notify_webhook, list) else [notify_webhook]
     elif webhook_type == 'error':
-        wh_url = ERROR_WEBHOOK
+        wh_urls = [error_webhook] if error_webhook else []
     else:
         logger.error(f'Unknown webhook type: {webhook_type}')
         return
-    if not wh_url:
+    if not wh_urls or not any(wh_urls):
         logger.error(f'Webhook URL for type {webhook_type} is not set.')
         return
-    try:
-        hook = Webhook(wh_url)
-        if embed:
-            hook.send(embed=embed)
-        elif content:
-            hook.send(content)
-    except Exception as e:
-        logger.error(f'Error sending {webhook_type} webhook: {e}')
+    for wh_url in wh_urls:
+        if not wh_url:
+            continue
+        try:
+            hook = Webhook(wh_url)
+            if embed:
+                hook.send(embed=embed)
+            elif content:
+                hook.send(content)
+        except Exception as e:
+            logger.error(f'Error sending {webhook_type} webhook to {wh_url}: {e}')
 
-def send_webhook_notification(product, url, event_type):
+def send_webhook_notification(product, url, event_type, notify_webhook):
     """
     Send a Discord webhook notification for product events.
     event_type: 'available', 'unavailable', 'new', or 'price_reduced'
@@ -274,12 +265,12 @@ def send_webhook_notification(product, url, event_type):
     embed.set_author(name='Shopify Crawler', icon_url='https://pbs.twimg.com/profile_images/1122559367046410242/6pzYlpWd_400x400.jpg')
     try:
         logger.debug(f'Sending {event_type} webhook notification')
-        send_webhook('notify', embed=embed)
+        send_webhook('notify', notify_webhook, None, embed=embed)
     except Exception as e:
         logger.error(f'Error sending {event_type} webhook: {e}')
 
-def send_error_webhook(message):
-    send_webhook('error', content=message)
+def send_error_webhook(message, error_webhook):
+    send_webhook('error', None, error_webhook, content=message)
 
 def column_exists(cursor, table, column):
     cursor.execute(f"PRAGMA table_info({table})")
@@ -400,6 +391,30 @@ def is_interesting(product):
         return True, product_type
     return False, product_type
 
+def get_runtime_env():
+    """Reload environment variables set by the web UI."""
+    from dotenv import load_dotenv
+    load_dotenv(override=True)
+    proxies = [p for p in os.getenv('PROXIES', '').split(',') if p]
+    # Support multiple webhook URLs (comma or newline separated)
+    notify_webhook = [w.strip() for w in os.getenv('NOTIFY_WEBHOOK', '').replace('\n', ',').split(',') if w.strip()]
+    error_webhook = os.getenv('ERROR_WEBHOOK', '')
+    try:
+        product_limit = int(os.getenv('PRODUCT_LIMIT', '200'))
+    except Exception:
+        product_limit = 200
+    try:
+        price_drop_threshold = float(os.getenv('PRICE_DROP_THRESHOLD', '0.1'))
+    except Exception:
+        price_drop_threshold = 0.1
+    return {
+        'PROXIES': proxies,
+        'NOTIFY_WEBHOOK': notify_webhook,
+        'ERROR_WEBHOOK': error_webhook,
+        'PRODUCT_LIMIT': product_limit,
+        'PRICE_DROP_THRESHOLD': price_drop_threshold
+    }
+
 def Main(url):
     logger.debug(f'Entering Main for url: {url}')
     # Initialize DB
@@ -409,15 +424,19 @@ def Main(url):
     init_product_count = len(product_availability)
     logger.debug(f'{init_product_count} products loaded from DB for {url}')
     logger.debug(f'DB Returned {len(product_availability)} products availablity')
-    proxies = getProxies()
-
-    logger.debug('Webhook loaded')   
-    loop_exceptions = 0 
+    loop_exceptions = 0
 
     while True:
         try:
+            # Reload environment variables set by the web UI
+            env = get_runtime_env()
+            proxies = env['PROXIES']
+            notify_webhook = env['NOTIFY_WEBHOOK']
+            error_webhook = env['ERROR_WEBHOOK']
+            product_limit = env['PRODUCT_LIMIT']
+            price_drop_threshold = env['PRICE_DROP_THRESHOLD']
             # Monitors website for new products
-            products = fetch_all_products_with_paging(url)
+            products = fetch_all_products_with_paging(url, proxies, product_limit)
             # Filter products using is_interesting before tracking for availability and new product detection in Main.
             interesting_products = [p for p in products if is_interesting(p)[0]]
             new_products = []
@@ -448,13 +467,13 @@ def Main(url):
                 if prev_available is not None and not prev_available and available:
                     logger.debug(f'Product became available: {product["title"]} ({handle})')
                     new_products.append(id_val)
-                    send_webhook_notification(product, url, 'available')
+                    send_webhook_notification(product, url, 'available', notify_webhook)
                     now = datetime.datetime.utcnow().isoformat()
                     update_availability_timestamps(id_val, url, became_available_at=now)
                 elif prev_available is not None and prev_available and not available:
                     logger.debug(f'Product became UNAVAILABLE: {product["title"]} ({handle})')
                     new_products.append(id_val)
-                    send_webhook_notification(product, url, 'unavailable')
+                    send_webhook_notification(product, url, 'unavailable', notify_webhook)
                     now = datetime.datetime.utcnow().isoformat()
                     update_availability_timestamps(id_val, url, became_unavailable_at=now)
                 elif prev_available is None:
@@ -463,15 +482,15 @@ def Main(url):
                     brandnewproducts += 1
                     # Only Send a webhook notification if DB has been initialized and we haven't sent 5 notifications already
                     if init_product_count > 0 and brandnewproducts <= 15:
-                        send_webhook_notification(product, url, 'new')
+                        send_webhook_notification(product, url, 'new', notify_webhook)
                 elif prev_price is not None and price < prev_price:
                     percent_drop = (prev_price - price) / prev_price
-                    if percent_drop >= PRICE_DROP_THRESHOLD:
+                    if percent_drop >= price_drop_threshold:
                         logger.debug(f'Product price reduced: {product["title"]} ({handle}) {prev_price} -> {price} ({percent_drop*100:.1f}% drop)')
                         # Add price drop info to product for notification
                         product['price_drop_amount'] = prev_price - price
                         product['price_drop_percent'] = percent_drop * 100
-                        send_webhook_notification(product, url, 'price_reduced')
+                        send_webhook_notification(product, url, 'price_reduced', notify_webhook)
                 # Update the tracked availability in memory and DB
                 product_availability[id_val] = {'available': available, 'price': price}
                 update_product_in_db(id_val, handle, title, available, product, url)
@@ -484,7 +503,7 @@ def Main(url):
         except Exception as e:
             if loop_exceptions > 5:
                 logger.error(f'Main loop has encountered too many exceptions ({loop_exceptions}). Exiting...')
-                send_error_webhook(f'Main loop has encountered too many exceptions last exception was ({e}). Exiting...')
+                send_error_webhook(f'Main loop has encountered too many exceptions last exception was ({e}). Exiting...', error_webhook)
                 break
             logger.error(f'Error in Main loop: {e}')
             logger.debug('Sleeping for 5 seconds before retrying...')
@@ -512,4 +531,4 @@ if __name__ == "__main__":
         #product_threads.start()
         main_threads.start()
         logger.debug(f'{main_threads.name} initialized')
-    send_error_webhook(f'SScraper 1.0 initialized with {len(urls)} URLs')
+    send_error_webhook(f'ShopifyScraper 1.1 initialized with {len(urls)} URLs')

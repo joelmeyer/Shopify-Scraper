@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='styles/settings.css') }}">
+<h2 style="text-align:center; margin-bottom:30px;">Settings</h2>
+<div class="settings-section" style="border:2px solid #f59e42;">
+  <h3 style="color:#f59e42;">Requires Restart</h3>
+  <div style="margin-bottom:10px;color:#b45309;">Changes to these settings require a manual restart of the scraper to take effect.</div>
+  <form id="env-form-restart" method="post" action="/settings/env">
+    <div id="env-fields-restart">
+      {% for key, value in env_vars.items() %}
+        {% if key == 'SHOPIFY_URLS' %}
+          <label>{{ key }}:<br>
+            <textarea name="{{ key }}" rows="3" style="width:100%;min-width:260px;max-width:100%;font-family:monospace;resize:vertical;" autocomplete="off" spellcheck="false">{{ value }}</textarea>
+            <span style="font-size:0.97em;color:#64748b;">Comma-separated list. One per line is OK.</span>
+          </label>
+        {% endif %}
+      {% endfor %}
+    </div>
+    <button type="submit">Save (Restart Required)</button>
+  </form>
+  <form method="post" action="/restart" style="margin-top:18px;text-align:center;" onsubmit="return confirm('Are you sure you want to restart the scraper? This will interrupt any running jobs.');">
+    <button type="submit" style="background:#f59e42;color:#fff;padding:10px 28px;font-size:1.1em;border:none;border-radius:5px;cursor:pointer;">Restart Scraper</button>
+  </form>
+</div>
+<div class="settings-section">
+  <form id="env-form" method="post" action="/settings/env">
+    <h3>Environment Variables</h3>
+    <div id="env-fields">
+      {% for key, value in env_vars.items() %}
+        {% if key == 'PRODUCT_LIMIT' %}
+          <label>{{ key }}:
+            <input type="text" name="{{ key }}" value="{{ value }}" autocomplete="off" spellcheck="false">
+          </label>
+        {% elif key == 'PRICE_DROP_THRESHOLD' %}
+          <label>{{ key }} (% drop to trigger alert):
+            <input type="number" step="0.01" min="0" max="1" name="{{ key }}" value="{{ value }}" autocomplete="off" spellcheck="false" style="width:120px;">
+            <span style="font-size:0.97em;color:#64748b;">Enter as a decimal (e.g., 0.1 for 10%)</span>
+          </label>
+        {% elif key == 'NOTIFY_WEBHOOK' %}
+          <label>{{ key }}:<br>
+            <textarea name="{{ key }}" rows="3" style="width:100%;min-width:260px;max-width:100%;font-family:monospace;resize:vertical;" autocomplete="off" spellcheck="false">{{ value }}</textarea>
+            <span style="font-size:0.97em;color:#64748b;">Supports multiple URLs: separate with commas or new lines.</span>
+          </label>
+        {% elif key != 'SHOPIFY_URLS' %}
+          <label>{{ key }}:<br>
+            <textarea name="{{ key }}" rows="3" style="width:100%;min-width:260px;max-width:100%;font-family:monospace;resize:vertical;" autocomplete="off" spellcheck="false">{{ value }}</textarea>
+            <span style="font-size:0.97em;color:#64748b;">Comma-separated list. One per line is OK.</span>
+          </label>
+        {% endif %}
+      {% endfor %}
+    </div>
+    <button type="submit">Save Environment Settings</button>
+  </form>
+</div>
+<div class="settings-section">
+  <form id="alcohol-types-form" method="post" action="/settings/alcohol_types">
+    <h3>Edit alcohol_types.json</h3>
+    <textarea name="alcohol_types_json" autocomplete="off" spellcheck="false">{{ alcohol_types_json }}</textarea><br>
+    <button type="submit">Save alcohol_types.json</button>
+  </form>
+</div>
+{% endblock %}
