@@ -14,6 +14,10 @@
   { "type": "Gin", "keywords": ["gin"] },
   { "type": "RTD/Cocktail", "keywords": ["rtd", "ready to drink", "cocktail", "margarita", "martini", "old fashioned", "negroni", "manhattan", "long island", "pina colada"] },
   { "type": "Non-Alcoholic Beer", "keywords": ["non-alcoholic", "alcohol free", "0.0", "zero alcohol", "heineken 0.0"] },
+  { "type": "Bitters", "keywords": ["bitters", "angostura", "peychaud", "orange bitters", "aromatic bitters", "chocolate bitters", "grapefruit bitters", "fee brothers", "regans"] },
+  { "type": "Shipping Add-On", "keywords": ["shipping", "add-on", "insurance", "signature", "adult signature", "cold pack", "ice pack", "thermal", "protection", "delivery protection", "shipping protection", "shipping insurance", "ship insure", "shipshield", "route protection", "shipping add-on"] },
+  { "type": "Books", "keywords": ["book", "books", "cocktail book", "recipe book", "spirits book", "whiskey book", "wine book", "bartender guide", "mixology", "bar book", "tasting guide", "drinks book"] },
+  { "type": "Glassware", "keywords": ["glass", "glassware", "tumbler", "rocks glass", "whiskey glass", "wine glass", "shot glass", "snifter", "highball", "lowball", "coupe", "martini glass", "pint glass", "beer mug", "beer stein", "flute", "goblet", "mug", "jigger", "barware", "decanter"] },
   { "type": "Soda/Non-Alcoholic", "keywords": [
     "coke", "coca-cola", "pepsi", "sprite", "fanta", "dr pepper","dr. pepper", "mountain dew", "7up", "root beer", "ginger ale", "sierra mist", "rc cola", "sunkist", "crush", "barq's", "mug", "diet coke", "diet pepsi", "gatorade", "powerade", "red bull", "monster", "rockstar", "energy drink", "vitaminwater", "snapple", "arizona", "iced tea", "lemonade", "bai", "la croix", "polar", "topo chico", "perrier", "san pellegrino", "water", "club soda", "tonic", "schweppes", "canada dry", "fresca", "jarritos", "big red", "calypso", "capri sun", "hi-c", "minute maid", "simply", "ocean spray", "v8", "juicy juice", "tropicana", "welch's", "nestea", "brisk", "honest", "pure leaf", "starbucks", "frappuccino", "nesquik", "yoo-hoo", "milk", "chocolate milk", "almond milk", "soy milk", "oat milk"
   ] },
