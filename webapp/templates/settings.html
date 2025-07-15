@@ -2,26 +2,6 @@
 {% block content %}
 <link rel="stylesheet" href="{{ url_for('static', filename='styles/settings.css') }}">
 <h2 style="text-align:center; margin-bottom:30px;">Settings</h2>
-<div class="settings-section" style="border:2px solid #f59e42;">
-  <h3 style="color:#f59e42;">Requires Restart</h3>
-  <div style="margin-bottom:10px;color:#b45309;">Changes to these settings require a manual restart of the scraper to take effect.</div>
-  <form id="env-form-restart" method="post" action="/settings/env">
-    <div id="env-fields-restart">
-      {% for key, value in env_vars.items() %}
-        {% if key == 'SHOPIFY_URLS' %}
-          <label>{{ key }}:<br>
-            <textarea name="{{ key }}" rows="3" style="width:100%;min-width:260px;max-width:100%;font-family:monospace;resize:vertical;" autocomplete="off" spellcheck="false">{{ value }}</textarea>
-            <span style="font-size:0.97em;color:#64748b;">Comma-separated list. One per line is OK.</span>
-          </label>
-        {% endif %}
-      {% endfor %}
-    </div>
-    <button type="submit">Save (Restart Required)</button>
-  </form>
-  <form method="post" action="/restart" style="margin-top:18px;text-align:center;" onsubmit="return confirm('Are you sure you want to restart the scraper? This will interrupt any running jobs.');">
-    <button type="submit" style="background:#f59e42;color:#fff;padding:10px 28px;font-size:1.1em;border:none;border-radius:5px;cursor:pointer;">Restart Scraper</button>
-  </form>
-</div>
 <div class="settings-section">
   <form id="env-form" method="post" action="/settings/env">
     <h3>Environment Variables</h3>

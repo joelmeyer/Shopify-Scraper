@@ -34,7 +34,7 @@ if not os.path.exists(ENV_PATH):
 URL_PATH = 'products.json?limit=200&page=1'
 DB_PATH = 'data/products.db'
 
-SHOPIFY_URLS = os.getenv('SHOPIFY_URLS', '').replace('\n', ',').split(',')
+SHOPIFY_URLS = os.getenv('SHOPIFY_URLS', '').split(',')
 
 # Advanced anti-bot constants
 USER_AGENTS = [

@@ -174,6 +174,8 @@ def view_logs():
 def settings():
     # Load .env
     env_vars = dotenv_values(SETTINGS_ENV_PATH)
+    # Remove SHOPIFY_URLS from env_vars so it is not sent to the frontend
+    env_vars.pop('SHOPIFY_URLS', None)
     # Load alcohol_types.json
     try:
         with open(ALCOHOL_TYPES_PATH, 'r', encoding='utf-8') as f:
@@ -186,6 +188,8 @@ def settings():
 @app.route('/settings/env', methods=['POST'])
 def update_env():
     env_vars = request.form.to_dict()
+    # Remove SHOPIFY_URLS if present in form submission
+    env_vars.pop('SHOPIFY_URLS', None)
     # Update .env file
     for key, value in env_vars.items():
         set_key(SETTINGS_ENV_PATH, key, value)
@@ -203,21 +207,6 @@ def update_alcohol_types():
         flash('alcohol_types.json updated.', 'success')
     except Exception as e:
         flash(f'Error updating alcohol_types.json: {e}', 'error')
-    return redirect(url_for('settings'))
-
-@app.route('/restart', methods=['POST'])
-def restart_app():
-    try:
-        # Only try supervisorctl
-        result = subprocess.run(['supervisorctl', 'restart', 'scraper'], capture_output=True, text=True)
-        if result.returncode == 0:
-            flash('Scraper restart command sent successfully.', 'success')
-        else:
-            flash(f'Failed to restart scraper with supervisorctl: {result.stderr}', 'error')
-    except FileNotFoundError:
-        flash('Restart not supported: supervisorctl not found in this environment.', 'error')
-    except Exception as e:
-        flash(f'Error attempting to restart scraper: {e}', 'error')
     return redirect(url_for('settings'))
 
 if __name__ == '__main__':
