@@ -6,6 +6,7 @@ from dotenv import dotenv_values, set_key
 import subprocess
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', os.urandom(24))
 DB_PATH = os.path.join(os.path.dirname(__file__), '../data/products.db')  # Adjusted for new structure
 LOG_PATH = os.path.join(os.path.dirname(__file__), '../logs/scraper.log')
 SETTINGS_ENV_PATH = os.path.join(os.path.dirname(__file__), '../.env')
@@ -207,15 +208,14 @@ def update_alcohol_types():
 @app.route('/restart', methods=['POST'])
 def restart_app():
     try:
-        # Try supervisor first
+        # Only try supervisorctl
         result = subprocess.run(['supervisorctl', 'restart', 'scraper'], capture_output=True, text=True)
-        if result.returncode != 0:
-            # Fallback to systemctl if supervisor fails
-            result = subprocess.run(['systemctl', 'restart', 'scraper'], capture_output=True, text=True)
         if result.returncode == 0:
             flash('Scraper restart command sent successfully.', 'success')
         else:
-            flash(f'Failed to restart scraper: {result.stderr}', 'error')
+            flash(f'Failed to restart scraper with supervisorctl: {result.stderr}', 'error')
+    except FileNotFoundError:
+        flash('Restart not supported: supervisorctl not found in this environment.', 'error')
     except Exception as e:
         flash(f'Error attempting to restart scraper: {e}', 'error')
     return redirect(url_for('settings'))

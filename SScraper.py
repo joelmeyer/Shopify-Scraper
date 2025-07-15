@@ -14,6 +14,22 @@ import math
 import random
 
 load_dotenv()
+error_webhook_startup = os.getenv('ERROR_WEBHOOK', '')
+
+# Ensure .env exists and is populated with current values
+ENV_PATH = os.path.join(os.path.dirname(__file__), '.env')
+if not os.path.exists(ENV_PATH):
+    env_vars = {
+        'SHOPIFY_URLS': os.getenv('SHOPIFY_URLS', ''),
+        'PROXIES': os.getenv('PROXIES', ''),
+        'NOTIFY_WEBHOOK': os.getenv('NOTIFY_WEBHOOK', ''),
+        'ERROR_WEBHOOK': os.getenv('ERROR_WEBHOOK', ''),
+        'PRODUCT_LIMIT': os.getenv('PRODUCT_LIMIT', '200'),
+        'PRICE_DROP_THRESHOLD': os.getenv('PRICE_DROP_THRESHOLD', '0.1'),
+    }
+    with open(ENV_PATH, 'w', encoding='utf-8') as f:
+        for k, v in env_vars.items():
+            f.write(f'{k}="{v}"\n')
 
 URL_PATH = 'products.json?limit=200&page=1'
 DB_PATH = 'data/products.db'
@@ -531,4 +547,4 @@ if __name__ == "__main__":
         #product_threads.start()
         main_threads.start()
         logger.debug(f'{main_threads.name} initialized')
-    send_error_webhook(f'ShopifyScraper 1.1 initialized with {len(urls)} URLs')
+    send_error_webhook(f'ShopifyScraper 1.1 initialized with {len(urls)} URLs', error_webhook_startup)
