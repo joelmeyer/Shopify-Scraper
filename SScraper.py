@@ -245,10 +245,10 @@ def send_webhook_notification(product, url, event_type):
     for v in variants:
         sizes_list.append(f"Size {v.get('title', '')}:" + f"{url}cart/{v.get('id', '')}:1")
     if event_type == 'available':
-        description = '***Product is now available!***'
+        description = '***Available Product again!***'
         color = 0x00ff00
     elif event_type == 'unavailable':
-        description = '***Product is now unavailable!***'
+        description = '***Unavailable Product now***'
         color = 0xff0000
     elif event_type == 'new':
         description = '***New product found!***'
