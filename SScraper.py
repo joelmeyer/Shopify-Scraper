@@ -308,6 +308,7 @@ def init_db():
             became_available_at TEXT,
             became_unavailable_at TEXT,
             date_added TEXT DEFAULT (datetime('now')),
+            ignore_notifications INTEGER DEFAULT 0,
             PRIMARY KEY (id, input_url)
         )''')
         # Add columns if missing (for migrations)
@@ -328,17 +329,22 @@ def init_db():
             except Exception as e:
                 logger.error(f'Error adding date_added column to products table {e}')
                 pass
+        if not column_exists(c, 'products', 'ignore_notifications'):
+            try:
+                c.execute('ALTER TABLE products ADD COLUMN ignore_notifications INTEGER DEFAULT 0')
+            except Exception:
+                pass
         conn.commit()
         conn.close()
 
 def load_product_availability(input_url):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute('SELECT id, available, price FROM products WHERE input_url = ?', (input_url,))
+    c.execute('SELECT id, available, price, ignore_notifications FROM products WHERE input_url = ?', (input_url,))
     rows = c.fetchall()
     conn.close()
-    # Return a dict: id -> {'available': bool, 'price': float or None}
-    return {id_: {'available': bool(available), 'price': float(price) if price is not None else None} for id_, available, price in rows}
+    # Return a dict: id -> {'available': bool, 'price': float or None, 'ignore_notifications': int}
+    return {id_: {'available': bool(available), 'price': float(price) if price is not None else None, 'ignore_notifications': ignore_notifications if ignore_notifications is not None else 0} for id_, available, price, ignore_notifications in rows}
 
 def update_product_in_db(id_val, handle, title, available, product, url):
     with db_lock:
@@ -441,20 +447,26 @@ def Main(url):
                 prev_price = None
                 prev_available = None
                 prev_info = product_availability.get(id_val)
+                ignore_notifications = 0
+
                 if prev_info is not None:
                     prev_available = prev_info.get('available')
                     prev_price = prev_info.get('price')
+                    ignore_notifications = prev_info.get('ignore_notifications', 0)
+                
                 # --- End price drop logic ---
                 if prev_available is not None and not prev_available and available:
                     logger.debug(f'Product became available: {product["title"]} ({handle})')
                     new_products.append(id_val)
-                    send_webhook_notification(product, url, 'available')
+                    if not ignore_notifications:
+                        send_webhook_notification(product, url, 'available')
                     now = datetime.datetime.utcnow().isoformat()
                     update_availability_timestamps(id_val, url, became_available_at=now)
                 elif prev_available is not None and prev_available and not available:
                     logger.debug(f'Product became UNAVAILABLE: {product["title"]} ({handle})')
                     new_products.append(id_val)
-                    send_webhook_notification(product, url, 'unavailable')
+                    if not ignore_notifications:
+                        send_webhook_notification(product, url, 'unavailable')
                     now = datetime.datetime.utcnow().isoformat()
                     update_availability_timestamps(id_val, url, became_unavailable_at=now)
                 elif prev_available is None:
@@ -471,9 +483,10 @@ def Main(url):
                         # Add price drop info to product for notification
                         product['price_drop_amount'] = prev_price - price
                         product['price_drop_percent'] = percent_drop * 100
-                        send_webhook_notification(product, url, 'price_reduced')
+                        if not ignore_notifications:
+                            send_webhook_notification(product, url, 'price_reduced')
                 # Update the tracked availability in memory and DB
-                product_availability[id_val] = {'available': available, 'price': price}
+                product_availability[id_val] = {'available': available, 'price': price, 'ignore_notifications': ignore_notifications}
                 update_product_in_db(id_val, handle, title, available, product, url)
             # --- End availability check ---
             logger.debug(f'Scraping target$* {url} new/changed products: {len(new_products)}')

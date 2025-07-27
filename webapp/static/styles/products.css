@@ -134,3 +134,79 @@ tr:hover {
     justify-content: space-between;
     align-items: center;
 }
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0,0,0,0.35);
+}
+.modal-content {
+    background: #fff;
+    margin: 60px auto;
+    padding: 30px 30px 20px 30px;
+    border-radius: 10px;
+    max-width: 500px;
+    box-shadow: 0 2px 16px #0002;
+    position: relative;
+}
+.close {
+    position: absolute;
+    right: 18px;
+    top: 12px;
+    font-size: 28px;
+    color: #888;
+    cursor: pointer;
+}
+.edit-input-title, .edit-input-vendor, .edit-input-alcohol-type {
+    width: 100%;
+    max-width: 400px;
+    padding: 7px;
+    border-radius: 5px;
+    border: 1px solid #bfc7d1;
+    font-size: 15px;
+}
+.edit-input-price {
+    width: 120px;
+    padding: 7px;
+    border-radius: 5px;
+    border: 1px solid #bfc7d1;
+    font-size: 15px;
+}
+.edit-select-available {
+    padding: 7px;
+    border-radius: 5px;
+    border: 1px solid #bfc7d1;
+    font-size: 15px;
+}
+.edit-save-btn {
+    padding: 7px 18px;
+    border-radius: 5px;
+    border: none;
+    background: #2563eb;
+    color: #fff;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.edit-save-btn:hover {
+    background: #1741a6;
+}
+.edit-cancel-btn {
+    padding: 7px 18px;
+    border-radius: 5px;
+    border: none;
+    background: #bfc7d1;
+    color: #22223b;
+    font-weight: 600;
+    cursor: pointer;
+    margin-left: 10px;
+    transition: background 0.2s;
+}
+.edit-cancel-btn:hover {
+    background: #e9ecef;
+}

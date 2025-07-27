@@ -29,6 +29,11 @@
             <option value="0">Unavailable</option>
         </select>
         <select id="inputUrlFilter"><option value="">All Input URLs</option></select>
+        <select id="ignoreFilter">
+            <option value="">Show All</option>
+            <option value="0">Show Only Not Ignored</option>
+            <option value="1">Show Only Ignored</option>
+        </select>
         <button onclick="resetFilters()">Reset</button>
     </div>
     <div id="loading" style="display:none;text-align:center;margin:20px 0;font-size:18px;color:#4f8cff;">
@@ -49,6 +54,7 @@
                 <th onclick="sortTable('alcohol_type')">Alcohol Type</th>
                 <th onclick="sortTable('published_at')">Published At</th>
                 <th onclick="sortTable('updated_at')">Updated At</th>
+                <th>Ignore Notifications</th>
                 <th></th>
             </tr>
         </thead>
@@ -56,6 +62,40 @@
         </tbody>
     </table>
     <div class="pagination" id="pagination"></div>
+</div>
+<div id="editProductModal" class="modal">
+  <div class="modal-content">
+    <span class="close" id="closeEditModal">&times;</span>
+    <h2>Edit Product</h2>
+    <form id="editProductForm">
+      <input type="hidden" name="id" id="editProductId">
+      <label>Title:<br>
+        <input type="text" name="title" id="editProductTitle" class="edit-input-title">
+      </label><br><br>
+      <label>Price:<br>
+        <input type="text" name="price" id="editProductPrice" class="edit-input-price">
+      </label><br><br>
+      <label>Available:<br>
+        <select name="available" id="editProductAvailable" class="edit-select-available">
+          <option value="1">Yes</option>
+          <option value="0">No</option>
+        </select>
+      </label><br><br>
+      <label>Vendor:<br>
+        <input type="text" name="vendor" id="editProductVendor" class="edit-input-vendor">
+      </label><br><br>
+      <label>Alcohol Type:<br>
+        <select name="alcohol_type" id="editProductAlcoholType" class="edit-input-alcohol-type">
+          <!-- Options will be populated by JS -->
+        </select>
+      </label><br><br>
+      <label>Ignore Notifications:<br>
+        <input type="checkbox" name="ignore_notifications" id="editProductIgnoreNotifications" value="1"> Suppress webhook alerts for this product
+      </label><br><br>
+      <button type="submit" class="edit-save-btn">Save Changes</button>
+      <button type="button" id="cancelEditModal" class="edit-cancel-btn">Cancel</button>
+    </form>
+  </div>
 </div>
 <script src="{{ url_for('static', filename='js/products.js') }}"></script>
 </body>
