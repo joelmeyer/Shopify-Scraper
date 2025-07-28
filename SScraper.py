@@ -359,7 +359,14 @@ def update_product_in_db(id_val, handle, title, available, product, url):
         price = variants[0].get('price', "0.00") if variants else "0.00"
         original_json = json.dumps(product)
         input_url = url
-        alcohol_type = get_alcohol_type(product)
+        new_alcohol_type = get_alcohol_type(product)
+        # Check if the current alcohol_type is 'unwanted' in the DB
+        c.execute('SELECT alcohol_type FROM products WHERE id = ? AND input_url = ?', (id_val, input_url))
+        row = c.fetchone()
+        if row and row[0] == 'unwanted':
+            alcohol_type = 'unwanted'
+        else:
+            alcohol_type = new_alcohol_type
         c.execute('''INSERT INTO products (id, handle, title, available, last_seen, published_at, created_at, updated_at, vendor, url, price, original_json, input_url, alcohol_type, date_added)
                      VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                      ON CONFLICT(id, input_url) DO UPDATE SET
@@ -374,8 +381,8 @@ def update_product_in_db(id_val, handle, title, available, product, url):
                         url=excluded.url,
                         price=excluded.price,
                         original_json=excluded.original_json,
-                        alcohol_type=excluded.alcohol_type''',
-                  (id_val, handle, title, int(available), published_at, created_at, updated_at, vendor, product_url, price, original_json, input_url, alcohol_type))
+                        alcohol_type=?''',
+                  (id_val, handle, title, int(available), published_at, created_at, updated_at, vendor, product_url, price, original_json, input_url, alcohol_type, alcohol_type))
         conn.commit()
         conn.close()
 
