@@ -9,6 +9,9 @@ let totalPages = 1;
 let totalRecords = 0;
 let allDataLoaded = false;
 
+// --- Bulk selection state ---
+let selectedProductIds = new Set();
+
 async function fetchProducts(page = 1, append = false) {
     document.getElementById('loading').style.display = '';
     document.getElementById('errorMsg').style.display = 'none';
@@ -89,8 +92,10 @@ function renderTable() {
         const p = filtered[i];
         const availClass = p.available ? 'availability-yes' : 'availability-no';
         const availText = p.available ? 'Yes' : 'No';
+        const checked = selectedProductIds.has(p.id) ? 'checked' : '';
         const row = document.createElement('tr');
         row.innerHTML = `
+            <td><input type="checkbox" class="select-product-checkbox" data-id="${p.id}" ${checked}></td>
             <td>${p.image_url ? `<img src="${p.image_url}" class="product-img">` : ''}</td>
             <td><a href="${p.url}" target="_blank">${p.title}</a></td>
             <td>${p.price || ''}</td>
@@ -99,14 +104,18 @@ function renderTable() {
             <td>${p.alcohol_type || ''}</td>
             <td><span class="date-cell">${p.published_at || ''}</span></td>
             <td><span class="date-cell">${p.updated_at || ''}</span></td>
-            <td><button class="expand-btn" data-idx="${i}" style="background:none;border:none;font-size:18px;cursor:pointer;">▶</button></td>
+            <td><input type="checkbox" class="ignore-notifications-toggle" data-id="${p.id}" ${p.ignore_notifications ? 'checked' : ''}></td>
+            <td>
+                <button class="expand-btn" data-idx="${i}" style="background:none;border:none;font-size:18px;cursor:pointer;">▶</button>
+                <button class="edit-btn" data-id="${p.id}" style="margin-left:8px;padding:4px 10px;font-size:14px;background:#2563eb;color:#fff;border:none;border-radius:4px;">Edit</button>
+            </td>
         `;
         body.appendChild(row);
         // Details row (hidden by default)
         const details = document.createElement('tr');
         details.className = 'details-row';
         details.style.display = 'none';
-        details.innerHTML = `<td colspan="9">
+        details.innerHTML = `<td colspan="10">
             <div style="padding:12px 18px;background:#f6f6fa;border-radius:7px;">
                 <b>Input URL:</b> ${p.input_url || ''}<br>
                 <b>Created At:</b> <span class="date-cell">${p.created_at || ''}</span><br>
@@ -114,6 +123,7 @@ function renderTable() {
                 <b>Became Available At:</b> <span class="date-cell">${p.became_available_at || ''}</span><br>
                 <b>Became Unavailable At:</b> <span class="date-cell">${p.became_unavailable_at || ''}</span><br>
                 <b>Date Added:</b> <span class="date-cell">${p.date_added || ''}</span><br>
+                <b>Ignore Notifications:</b> <input type="checkbox" class="ignore-notifications-toggle" data-id="${p.id}" ${p.ignore_notifications ? 'checked' : ''}> <span style="font-size:13px;color:#888;">(Suppress webhook alerts for this product)</span>
             </div>
         </td>`;
         body.appendChild(details);
@@ -132,6 +142,86 @@ function renderTable() {
             }
         };
     });
+    // Add ignore_notifications toggle logic
+    document.querySelectorAll('.ignore-notifications-toggle').forEach(toggle => {
+        toggle.onchange = async function() {
+            const id = toggle.getAttribute('data-id');
+            const checked = toggle.checked ? 1 : 0;
+            try {
+                const res = await fetch(`/api/products/${id}/ignore`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ignore_notifications: checked })
+                });
+                if (!res.ok) throw new Error('Failed to update ignore_notifications');
+                // Update local data
+                products.forEach(p => { if (p.id == id) p.ignore_notifications = checked; });
+                filtered.forEach(p => { if (p.id == id) p.ignore_notifications = checked; });
+            } catch (err) {
+                alert('Error updating ignore_notifications: ' + err.message);
+            }
+        };
+    });
+    // Add edit modal logic
+    document.querySelectorAll('.edit-btn').forEach(btn => {
+        btn.onclick = function() {
+            const id = btn.getAttribute('data-id');
+            const product = products.find(p => p.id == id);
+            if (!product) return;
+            document.getElementById('editProductId').value = product.id;
+            document.getElementById('editProductTitle').value = product.title || '';
+            document.getElementById('editProductPrice').value = product.price || '';
+            document.getElementById('editProductAvailable').value = product.available ? '1' : '0';
+            document.getElementById('editProductVendor').value = product.vendor || '';
+            populateEditAlcoholTypeDropdown(product.alcohol_type || 'Unwanted');
+            document.getElementById('editProductIgnoreNotifications').checked = !!product.ignore_notifications;
+            document.getElementById('editProductModal').style.display = 'block';
+        };
+    });
+    document.getElementById('closeEditModal').onclick = function() {
+        document.getElementById('editProductModal').style.display = 'none';
+    };
+    document.getElementById('cancelEditModal').onclick = function() {
+        document.getElementById('editProductModal').style.display = 'none';
+    };
+    document.getElementById('editProductForm').onsubmit = async function(e) {
+        e.preventDefault();
+        const id = document.getElementById('editProductId').value;
+        const title = document.getElementById('editProductTitle').value;
+        const price = document.getElementById('editProductPrice').value;
+        const available = document.getElementById('editProductAvailable').value;
+        const vendor = document.getElementById('editProductVendor').value;
+        const alcohol_type = document.getElementById('editProductAlcoholType').value;
+        const ignore_notifications = document.getElementById('editProductIgnoreNotifications').checked ? 1 : 0;
+        try {
+            const res = await fetch(`/products/${id}/edit`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `title=${encodeURIComponent(title)}&price=${encodeURIComponent(price)}&available=${encodeURIComponent(available)}&vendor=${encodeURIComponent(vendor)}&alcohol_type=${encodeURIComponent(alcohol_type)}&ignore_notifications=${encodeURIComponent(ignore_notifications)}`
+            });
+            if (!res.ok) throw new Error('Failed to update product');
+            document.getElementById('editProductModal').style.display = 'none';
+            // Update product in local arrays
+            [products, filtered].forEach(arr => {
+            const idx = arr.findIndex(p => p.id == id);
+            if (idx !== -1) {
+                arr[idx] = {
+                    ...arr[idx],
+                    title,
+                    price,
+                    available: available === '1',
+                    vendor,
+                    alcohol_type,
+                    ignore_notifications
+                };
+            }
+        });
+            renderTable();
+            renderStats();
+        } catch (err) {
+            alert('Error updating product: ' + err.message);
+        }
+    };
     // Render dates in browser timezone
     document.querySelectorAll('.date-cell').forEach(cell => {
         if (cell.textContent && !isNaN(Date.parse(cell.textContent))) {
@@ -140,6 +230,8 @@ function renderTable() {
         }
     });
     renderStatsPanel();
+    // Always call updateBulkActionsBar after table render to ensure correct state
+    updateBulkActionsBar();
 }
 
 function renderPagination() {
@@ -191,6 +283,8 @@ function filterTable() {
     const type = document.getElementById('typeFilter').value;
     const avail = document.getElementById('availableFilter').value;
     const inputUrl = document.getElementById('inputUrlFilter').value;
+    const ignore = document.getElementById('ignoreFilter').value;
+    const showUnwanted = document.getElementById('showUnwantedCheckbox').checked;
     filtered = products.filter(p => {
         let match = true;
         if (q) match = (p.title && p.title.toLowerCase().includes(q)) || (p.vendor && p.vendor.toLowerCase().includes(q)) || (p.alcohol_type && p.alcohol_type.toLowerCase().includes(q));
@@ -198,6 +292,8 @@ function filterTable() {
         if (type && p.alcohol_type !== type) match = false;
         if (avail && String(Number(!!p.available)) !== avail) match = false;
         if (inputUrl && p.input_url !== inputUrl) match = false;
+        if (ignore !== '' && String(Number(!!p.ignore_notifications)) !== ignore) match = false;
+        if (!showUnwanted && p.alcohol_type === 'Unwanted') match = false;
         return match;
     });
     sortTable(sortKey);
@@ -210,6 +306,8 @@ function resetFilters() {
     document.getElementById('typeFilter').value = '';
     document.getElementById('availableFilter').value = '';
     document.getElementById('inputUrlFilter').value = '';
+    document.getElementById('ignoreFilter').value = '';
+    document.getElementById('showUnwantedCheckbox').checked = false;
     filterTable();
 }
 
@@ -289,7 +387,7 @@ function loadProductsFromCache() {
 }
 
 // --- Patch event handlers to save state ---
-['searchInput','vendorFilter','typeFilter','availableFilter','inputUrlFilter'].forEach(id => {
+['searchInput','vendorFilter','typeFilter','availableFilter','inputUrlFilter','ignoreFilter'].forEach(id => {
     document.getElementById(id).addEventListener('change', saveState);
     document.getElementById(id).addEventListener('input', saveState);
 });
@@ -341,6 +439,8 @@ document.getElementById('vendorFilter').addEventListener('change', filterTable);
 document.getElementById('typeFilter').addEventListener('change', filterTable);
 document.getElementById('availableFilter').addEventListener('change', filterTable);
 document.getElementById('inputUrlFilter').addEventListener('change', filterTable);
+document.getElementById('ignoreFilter').addEventListener('change', filterTable);
+document.getElementById('showUnwantedCheckbox').addEventListener('change', filterTable);
 window.onload = function() {
     fetchProducts(currentPage);
     renderStats();
@@ -430,3 +530,101 @@ function renderStats() {
     if (filterSummary.length) html += `<div style="color:#2563eb;"><b>Active Filters:</b> ${filterSummary.join('; ')}</div>`;
     document.getElementById('statsPanel').innerHTML = html;
 }
+
+function getAvailableAlcoholTypes() {
+    const types = [...new Set(products.map(p => p.alcohol_type).filter(Boolean))].sort();
+    if (!types.includes('Unwanted')) types.unshift('Unwanted');
+    return types;
+}
+
+function populateEditAlcoholTypeDropdown(selectedType) {
+    const select = document.getElementById('editProductAlcoholType');
+    select.innerHTML = '';
+    getAvailableAlcoholTypes().forEach(type => {
+        const opt = document.createElement('option');
+        opt.value = type;
+        opt.textContent = type;
+        if (type === selectedType) opt.selected = true;
+        select.appendChild(opt);
+    });
+}
+document.getElementById('editProductAlcoholType').addEventListener('change', function() {
+    if (this.value === 'Unwanted') {
+        document.getElementById('editProductIgnoreNotifications').checked = true;
+    }
+    else {
+        document.getElementById('editProductIgnoreNotifications').checked = false;
+    }
+});
+// --- Select all logic ---
+document.getElementById('selectAllCheckbox').onchange = function() {
+    const start = (currentPage - 1) * perPage;
+    const end = Math.min(start + perPage, filtered.length);
+    const allVisibleIds = filtered.slice(start, end).map(p => p.id);
+    if (this.checked) {
+        allVisibleIds.forEach(id => selectedProductIds.add(id));
+    } else {
+        allVisibleIds.forEach(id => selectedProductIds.delete(id));
+    }
+    renderTable();
+    updateBulkActionsBar();
+};
+// --- Bulk action handlers ---
+document.getElementById('bulkIgnoreBtn').onclick = async function() {
+    for (const id of selectedProductIds) {
+        // Update locally
+        [products, filtered].forEach(arr => {
+            const idx = arr.findIndex(p => p.id == id);
+            if (idx !== -1) arr[idx].ignore_notifications = 1;
+        });
+        // Update backend
+        await fetch(`/api/products/${id}/ignore`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ignore_notifications: 1 })
+        });
+    }
+    renderTable();
+    renderStats();
+};
+document.getElementById('bulkUnwantedBtn').onclick = async function() {
+    for (const id of selectedProductIds) {
+        // Update locally
+        [products, filtered].forEach(arr => {
+            const idx = arr.findIndex(p => p.id == id);
+            if (idx !== -1) {
+                arr[idx].alcohol_type = 'Unwanted';
+                arr[idx].ignore_notifications = 1;
+            }
+        });
+        // Update backend
+        await fetch(`/products/${id}/edit`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `alcohol_type=Unwanted&ignore_notifications=1`
+        });
+    }
+    renderTable();
+    renderStats();
+};
+
+
+function updateBulkActionsBar() {
+    const bulkBar = document.getElementById('bulkActions');
+    bulkBar.style.display = selectedProductIds.size > 0 ? '' : 'none';
+}
+
+document.getElementById('productsBody').addEventListener('change', function(event) {
+    if (event.target.classList.contains('select-product-checkbox')) {
+        const id = event.target.getAttribute('data-id');
+        if (event.target.checked) selectedProductIds.add(id);
+        else selectedProductIds.delete(id);
+        updateBulkActionsBar();
+        // Update selectAllCheckbox state
+        const start = (currentPage - 1) * perPage;
+        const end = Math.min(start + perPage, filtered.length);
+        const allVisibleIds = filtered.slice(start, end).map(p => p.id);
+        const allChecked = allVisibleIds.every(id => selectedProductIds.has(id));
+        document.getElementById('selectAllCheckbox').checked = allChecked;
+    }
+});

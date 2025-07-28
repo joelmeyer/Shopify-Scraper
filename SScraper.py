@@ -308,6 +308,7 @@ def init_db():
             became_available_at TEXT,
             became_unavailable_at TEXT,
             date_added TEXT DEFAULT (datetime('now')),
+            ignore_notifications INTEGER DEFAULT 0,
             PRIMARY KEY (id, input_url)
         )''')
         # Add columns if missing (for migrations)
@@ -328,17 +329,22 @@ def init_db():
             except Exception as e:
                 logger.error(f'Error adding date_added column to products table {e}')
                 pass
+        if not column_exists(c, 'products', 'ignore_notifications'):
+            try:
+                c.execute('ALTER TABLE products ADD COLUMN ignore_notifications INTEGER DEFAULT 0')
+            except Exception:
+                pass
         conn.commit()
         conn.close()
 
 def load_product_availability(input_url):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute('SELECT id, available, price FROM products WHERE input_url = ?', (input_url,))
+    c.execute('SELECT id, available, price, ignore_notifications FROM products WHERE input_url = ?', (input_url,))
     rows = c.fetchall()
     conn.close()
-    # Return a dict: id -> {'available': bool, 'price': float or None}
-    return {id_: {'available': bool(available), 'price': float(price) if price is not None else None} for id_, available, price in rows}
+    # Return a dict: id -> {'available': bool, 'price': float or None, 'ignore_notifications': int}
+    return {id_: {'available': bool(available), 'price': float(price) if price is not None else None, 'ignore_notifications': ignore_notifications if ignore_notifications is not None else 0} for id_, available, price, ignore_notifications in rows}
 
 def update_product_in_db(id_val, handle, title, available, product, url):
     with db_lock:
@@ -353,7 +359,14 @@ def update_product_in_db(id_val, handle, title, available, product, url):
         price = variants[0].get('price', "0.00") if variants else "0.00"
         original_json = json.dumps(product)
         input_url = url
-        alcohol_type = get_alcohol_type(product)
+        new_alcohol_type = get_alcohol_type(product)
+        # Check if the current alcohol_type is 'unwanted' in the DB
+        c.execute('SELECT alcohol_type FROM products WHERE id = ? AND input_url = ?', (id_val, input_url))
+        row = c.fetchone()
+        if row and row[0] == 'unwanted':
+            alcohol_type = 'unwanted'
+        else:
+            alcohol_type = new_alcohol_type
         c.execute('''INSERT INTO products (id, handle, title, available, last_seen, published_at, created_at, updated_at, vendor, url, price, original_json, input_url, alcohol_type, date_added)
                      VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                      ON CONFLICT(id, input_url) DO UPDATE SET
@@ -368,8 +381,8 @@ def update_product_in_db(id_val, handle, title, available, product, url):
                         url=excluded.url,
                         price=excluded.price,
                         original_json=excluded.original_json,
-                        alcohol_type=excluded.alcohol_type''',
-                  (id_val, handle, title, int(available), published_at, created_at, updated_at, vendor, product_url, price, original_json, input_url, alcohol_type))
+                        alcohol_type=?''',
+                  (id_val, handle, title, int(available), published_at, created_at, updated_at, vendor, product_url, price, original_json, input_url, alcohol_type, alcohol_type))
         conn.commit()
         conn.close()
 
@@ -393,10 +406,10 @@ def get_random_sleep_time(min_seconds=240, max_seconds=360):
 
 def is_interesting(product):
     """
-    Returns (True, product_type) if the product is interesting (alcohol type is bourbon, whiskey, scotch, or other), else (False, product_type).
+    Returns (True, product_type) if the product is interesting (alcohol type is bourbon, whiskey, or other), else (False, product_type).
     """
     product_type = get_alcohol_type(product)
-    if product_type.lower() in ['bourbon', 'whiskey', 'scotch', 'other']:
+    if product_type.lower() in ['bourbon', 'whiskey', 'other']:
         return True, product_type
     return False, product_type
 
@@ -412,10 +425,17 @@ def Main(url):
     proxies = getProxies()
 
     logger.debug('Webhook loaded')   
-    loop_exceptions = 0 
+    loop_exceptions = 0
+    refresh_counter = 0
+    REFRESH_INTERVAL = 5  # every 5 loops
 
     while True:
         try:
+            # Refresh product_availability from DB every 5 loops
+            if refresh_counter >= REFRESH_INTERVAL:
+                product_availability = load_product_availability(url)
+                refresh_counter = 0
+                logger.debug('Refreshed product_availability from DB (every 5 loops)')
             # Monitors website for new products
             products = fetch_all_products_with_paging(url)
             # Filter products using is_interesting before tracking for availability and new product detection in Main.
@@ -441,20 +461,26 @@ def Main(url):
                 prev_price = None
                 prev_available = None
                 prev_info = product_availability.get(id_val)
+                ignore_notifications = 0
+
                 if prev_info is not None:
                     prev_available = prev_info.get('available')
                     prev_price = prev_info.get('price')
+                    ignore_notifications = prev_info.get('ignore_notifications', 0)
+                
                 # --- End price drop logic ---
                 if prev_available is not None and not prev_available and available:
                     logger.debug(f'Product became available: {product["title"]} ({handle})')
                     new_products.append(id_val)
-                    send_webhook_notification(product, url, 'available')
+                    if not ignore_notifications:
+                        send_webhook_notification(product, url, 'available')
                     now = datetime.datetime.utcnow().isoformat()
                     update_availability_timestamps(id_val, url, became_available_at=now)
                 elif prev_available is not None and prev_available and not available:
                     logger.debug(f'Product became UNAVAILABLE: {product["title"]} ({handle})')
                     new_products.append(id_val)
-                    send_webhook_notification(product, url, 'unavailable')
+                    if not ignore_notifications:
+                        send_webhook_notification(product, url, 'unavailable')
                     now = datetime.datetime.utcnow().isoformat()
                     update_availability_timestamps(id_val, url, became_unavailable_at=now)
                 elif prev_available is None:
@@ -471,16 +497,21 @@ def Main(url):
                         # Add price drop info to product for notification
                         product['price_drop_amount'] = prev_price - price
                         product['price_drop_percent'] = percent_drop * 100
-                        send_webhook_notification(product, url, 'price_reduced')
+                        if not ignore_notifications:
+                            send_webhook_notification(product, url, 'price_reduced')
                 # Update the tracked availability in memory and DB
-                product_availability[id_val] = {'available': available, 'price': price}
+                product_availability[id_val] = {'available': available, 'price': price, 'ignore_notifications': ignore_notifications}
                 update_product_in_db(id_val, handle, title, available, product, url)
             # --- End availability check ---
             logger.debug(f'Scraping target$* {url} new/changed products: {len(new_products)}')
             sleep_time = get_random_sleep_time(240, 360)
             logger.debug(f'sleeping for {sleep_time} seconds')
+            logger.debug(f'Current refresh_counter: {refresh_counter}')
+            refresh_counter += 1
             time.sleep(sleep_time)
             loop_exceptions = 0  # Reset exception counter after successful iteration
+            # End of main loop, increment refresh_counter
+            
         except Exception as e:
             if loop_exceptions > 5:
                 logger.error(f'Main loop has encountered too many exceptions ({loop_exceptions}). Exiting...')
