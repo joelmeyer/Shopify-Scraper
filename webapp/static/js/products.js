@@ -173,7 +173,7 @@ function renderTable() {
             document.getElementById('editProductPrice').value = product.price || '';
             document.getElementById('editProductAvailable').value = product.available ? '1' : '0';
             document.getElementById('editProductVendor').value = product.vendor || '';
-            populateEditAlcoholTypeDropdown(product.alcohol_type || 'Unwanted');
+            populateEditAlcoholTypeDropdown(product.alcohol_type || 'unwanted');
             document.getElementById('editProductIgnoreNotifications').checked = !!product.ignore_notifications;
             document.getElementById('editProductModal').style.display = 'block';
         };
@@ -293,7 +293,7 @@ function filterTable() {
         if (avail && String(Number(!!p.available)) !== avail) match = false;
         if (inputUrl && p.input_url !== inputUrl) match = false;
         if (ignore !== '' && String(Number(!!p.ignore_notifications)) !== ignore) match = false;
-        if (!showUnwanted && p.alcohol_type === 'Unwanted') match = false;
+        if (!showUnwanted && p.alcohol_type === 'unwanted') match = false;
         return match;
     });
     sortTable(sortKey);
@@ -533,7 +533,7 @@ function renderStats() {
 
 function getAvailableAlcoholTypes() {
     const types = [...new Set(products.map(p => p.alcohol_type).filter(Boolean))].sort();
-    if (!types.includes('Unwanted')) types.unshift('Unwanted');
+    if (!types.includes('unwanted')) types.unshift('unwanted');
     return types;
 }
 
@@ -549,7 +549,7 @@ function populateEditAlcoholTypeDropdown(selectedType) {
     });
 }
 document.getElementById('editProductAlcoholType').addEventListener('change', function() {
-    if (this.value === 'Unwanted') {
+    if (this.value === 'unwanted') {
         document.getElementById('editProductIgnoreNotifications').checked = true;
     }
     else {
@@ -593,7 +593,7 @@ document.getElementById('bulkUnwantedBtn').onclick = async function() {
         [products, filtered].forEach(arr => {
             const idx = arr.findIndex(p => p.id == id);
             if (idx !== -1) {
-                arr[idx].alcohol_type = 'Unwanted';
+                arr[idx].alcohol_type = 'unwanted';
                 arr[idx].ignore_notifications = 1;
             }
         });
@@ -601,7 +601,7 @@ document.getElementById('bulkUnwantedBtn').onclick = async function() {
         await fetch(`/products/${id}/edit`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: `alcohol_type=Unwanted&ignore_notifications=1`
+            body: `alcohol_type=unwanted&ignore_notifications=1`
         });
     }
     renderTable();
