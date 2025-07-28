@@ -399,10 +399,10 @@ def get_random_sleep_time(min_seconds=240, max_seconds=360):
 
 def is_interesting(product):
     """
-    Returns (True, product_type) if the product is interesting (alcohol type is bourbon, whiskey, scotch, or other), else (False, product_type).
+    Returns (True, product_type) if the product is interesting (alcohol type is bourbon, whiskey, or other), else (False, product_type).
     """
     product_type = get_alcohol_type(product)
-    if product_type.lower() in ['bourbon', 'whiskey', 'scotch', 'other']:
+    if product_type.lower() in ['bourbon', 'whiskey', 'other']:
         return True, product_type
     return False, product_type
 
@@ -418,10 +418,17 @@ def Main(url):
     proxies = getProxies()
 
     logger.debug('Webhook loaded')   
-    loop_exceptions = 0 
+    loop_exceptions = 0
+    refresh_counter = 0
+    REFRESH_INTERVAL = 5  # every 5 loops
 
     while True:
         try:
+            # Refresh product_availability from DB every 5 loops
+            if refresh_counter >= REFRESH_INTERVAL:
+                product_availability = load_product_availability(url)
+                refresh_counter = 0
+                logger.debug('Refreshed product_availability from DB (every 5 loops)')
             # Monitors website for new products
             products = fetch_all_products_with_paging(url)
             # Filter products using is_interesting before tracking for availability and new product detection in Main.
@@ -492,8 +499,12 @@ def Main(url):
             logger.debug(f'Scraping target$* {url} new/changed products: {len(new_products)}')
             sleep_time = get_random_sleep_time(240, 360)
             logger.debug(f'sleeping for {sleep_time} seconds')
+            logger.debug(f'Current refresh_counter: {refresh_counter}')
+            refresh_counter += 1
             time.sleep(sleep_time)
             loop_exceptions = 0  # Reset exception counter after successful iteration
+            # End of main loop, increment refresh_counter
+            
         except Exception as e:
             if loop_exceptions > 5:
                 logger.error(f'Main loop has encountered too many exceptions ({loop_exceptions}). Exiting...')
