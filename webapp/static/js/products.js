@@ -612,6 +612,17 @@ document.getElementById('bulkUnwantedBtn').onclick = async function() {
 function updateBulkActionsBar() {
     const bulkBar = document.getElementById('bulkActions');
     bulkBar.style.display = selectedProductIds.size > 0 ? '' : 'none';
+    // Update selected count label
+    let label = document.getElementById('selectedCountLabel');
+    if (!label) {
+        label = document.createElement('div');
+        label.id = 'selectedCountLabel';
+        label.className = 'selected-count-label';
+        const table = document.getElementById('productsTable');
+        table.parentNode.insertBefore(label, table);
+    }
+    label.textContent = selectedProductIds.size > 0 ? `${selectedProductIds.size} product${selectedProductIds.size === 1 ? '' : 's'} selected` : '';
+    label.style.display = selectedProductIds.size > 0 ? '' : 'none';
 }
 
 document.getElementById('productsBody').addEventListener('change', function(event) {
