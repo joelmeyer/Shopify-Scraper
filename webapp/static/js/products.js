@@ -9,6 +9,9 @@ let totalPages = 1;
 let totalRecords = 0;
 let allDataLoaded = false;
 
+// --- Bulk selection state ---
+let selectedProductIds = new Set();
+
 async function fetchProducts(page = 1, append = false) {
     document.getElementById('loading').style.display = '';
     document.getElementById('errorMsg').style.display = 'none';
@@ -89,8 +92,10 @@ function renderTable() {
         const p = filtered[i];
         const availClass = p.available ? 'availability-yes' : 'availability-no';
         const availText = p.available ? 'Yes' : 'No';
+        const checked = selectedProductIds.has(p.id) ? 'checked' : '';
         const row = document.createElement('tr');
         row.innerHTML = `
+            <td><input type="checkbox" class="select-product-checkbox" data-id="${p.id}" ${checked}></td>
             <td>${p.image_url ? `<img src="${p.image_url}" class="product-img">` : ''}</td>
             <td><a href="${p.url}" target="_blank">${p.title}</a></td>
             <td>${p.price || ''}</td>
@@ -198,19 +203,19 @@ function renderTable() {
             document.getElementById('editProductModal').style.display = 'none';
             // Update product in local arrays
             [products, filtered].forEach(arr => {
-                const idx = arr.findIndex(p => p.id == id);
-                if (idx !== -1) {
-                    arr[idx] = {
-                        ...arr[idx],
-                        title,
-                        price,
-                        available: available === '1',
-                        vendor,
-                        alcohol_type,
-                        ignore_notifications
-                    };
-                }
-            });
+            const idx = arr.findIndex(p => p.id == id);
+            if (idx !== -1) {
+                arr[idx] = {
+                    ...arr[idx],
+                    title,
+                    price,
+                    available: available === '1',
+                    vendor,
+                    alcohol_type,
+                    ignore_notifications
+                };
+            }
+        });
             renderTable();
             renderStats();
         } catch (err) {
@@ -225,6 +230,8 @@ function renderTable() {
         }
     });
     renderStatsPanel();
+    // Always call updateBulkActionsBar after table render to ensure correct state
+    updateBulkActionsBar();
 }
 
 function renderPagination() {
@@ -277,6 +284,7 @@ function filterTable() {
     const avail = document.getElementById('availableFilter').value;
     const inputUrl = document.getElementById('inputUrlFilter').value;
     const ignore = document.getElementById('ignoreFilter').value;
+    const showUnwanted = document.getElementById('showUnwantedCheckbox').checked;
     filtered = products.filter(p => {
         let match = true;
         if (q) match = (p.title && p.title.toLowerCase().includes(q)) || (p.vendor && p.vendor.toLowerCase().includes(q)) || (p.alcohol_type && p.alcohol_type.toLowerCase().includes(q));
@@ -285,6 +293,7 @@ function filterTable() {
         if (avail && String(Number(!!p.available)) !== avail) match = false;
         if (inputUrl && p.input_url !== inputUrl) match = false;
         if (ignore !== '' && String(Number(!!p.ignore_notifications)) !== ignore) match = false;
+        if (!showUnwanted && p.alcohol_type === 'Unwanted') match = false;
         return match;
     });
     sortTable(sortKey);
@@ -298,6 +307,7 @@ function resetFilters() {
     document.getElementById('availableFilter').value = '';
     document.getElementById('inputUrlFilter').value = '';
     document.getElementById('ignoreFilter').value = '';
+    document.getElementById('showUnwantedCheckbox').checked = false;
     filterTable();
 }
 
@@ -430,6 +440,7 @@ document.getElementById('typeFilter').addEventListener('change', filterTable);
 document.getElementById('availableFilter').addEventListener('change', filterTable);
 document.getElementById('inputUrlFilter').addEventListener('change', filterTable);
 document.getElementById('ignoreFilter').addEventListener('change', filterTable);
+document.getElementById('showUnwantedCheckbox').addEventListener('change', filterTable);
 window.onload = function() {
     fetchProducts(currentPage);
     renderStats();
@@ -537,3 +548,83 @@ function populateEditAlcoholTypeDropdown(selectedType) {
         select.appendChild(opt);
     });
 }
+document.getElementById('editProductAlcoholType').addEventListener('change', function() {
+    if (this.value === 'Unwanted') {
+        document.getElementById('editProductIgnoreNotifications').checked = true;
+    }
+    else {
+        document.getElementById('editProductIgnoreNotifications').checked = false;
+    }
+});
+// --- Select all logic ---
+document.getElementById('selectAllCheckbox').onchange = function() {
+    const start = (currentPage - 1) * perPage;
+    const end = Math.min(start + perPage, filtered.length);
+    const allVisibleIds = filtered.slice(start, end).map(p => p.id);
+    if (this.checked) {
+        allVisibleIds.forEach(id => selectedProductIds.add(id));
+    } else {
+        allVisibleIds.forEach(id => selectedProductIds.delete(id));
+    }
+    renderTable();
+    updateBulkActionsBar();
+};
+// --- Bulk action handlers ---
+document.getElementById('bulkIgnoreBtn').onclick = async function() {
+    for (const id of selectedProductIds) {
+        // Update locally
+        [products, filtered].forEach(arr => {
+            const idx = arr.findIndex(p => p.id == id);
+            if (idx !== -1) arr[idx].ignore_notifications = 1;
+        });
+        // Update backend
+        await fetch(`/api/products/${id}/ignore`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ignore_notifications: 1 })
+        });
+    }
+    renderTable();
+    renderStats();
+};
+document.getElementById('bulkUnwantedBtn').onclick = async function() {
+    for (const id of selectedProductIds) {
+        // Update locally
+        [products, filtered].forEach(arr => {
+            const idx = arr.findIndex(p => p.id == id);
+            if (idx !== -1) {
+                arr[idx].alcohol_type = 'Unwanted';
+                arr[idx].ignore_notifications = 1;
+            }
+        });
+        // Update backend
+        await fetch(`/products/${id}/edit`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `alcohol_type=Unwanted&ignore_notifications=1`
+        });
+    }
+    renderTable();
+    renderStats();
+};
+
+
+function updateBulkActionsBar() {
+    const bulkBar = document.getElementById('bulkActions');
+    bulkBar.style.display = selectedProductIds.size > 0 ? '' : 'none';
+}
+
+document.getElementById('productsBody').addEventListener('change', function(event) {
+    if (event.target.classList.contains('select-product-checkbox')) {
+        const id = event.target.getAttribute('data-id');
+        if (event.target.checked) selectedProductIds.add(id);
+        else selectedProductIds.delete(id);
+        updateBulkActionsBar();
+        // Update selectAllCheckbox state
+        const start = (currentPage - 1) * perPage;
+        const end = Math.min(start + perPage, filtered.length);
+        const allVisibleIds = filtered.slice(start, end).map(p => p.id);
+        const allChecked = allVisibleIds.every(id => selectedProductIds.has(id));
+        document.getElementById('selectAllCheckbox').checked = allChecked;
+    }
+});
