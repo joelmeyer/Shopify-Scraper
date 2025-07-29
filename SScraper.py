@@ -268,6 +268,10 @@ def send_webhook_notification(product, url, event_type):
     embed.add_field(name='Price', value=str(price))
     embed.add_field(name='Available', value=str(available))
     embed.add_field(name='ATC Links', value='\n'.join(sizes_list))
+    # Add Web UI link for managing product
+    webui_base = os.getenv('WEBUI_BASE_URL', 'http://localhost:5000')
+    ignore_link = f"{webui_base}/products/{product.get('id')}/ignore"
+    embed.add_field(name='Ignore in Web UI', value=f'[Ignore this product]({ignore_link})', inline=False)
     embed.set_footer(text='Shopify Scraper', icon_url='https://pbs.twimg.com/profile_images/1122559367046410242/6pzYlpWd_400x400.jpg')
     if image_url:
         embed.set_thumbnail(image_url)

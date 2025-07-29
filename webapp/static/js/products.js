@@ -92,10 +92,10 @@ function renderTable() {
         const p = filtered[i];
         const availClass = p.available ? 'availability-yes' : 'availability-no';
         const availText = p.available ? 'Yes' : 'No';
-        const checked = selectedProductIds.has(p.id) ? 'checked' : '';
+        const checked = selectedProductIds.has(parseInt(p.id, 10)) ? 'checked' : '';
         const row = document.createElement('tr');
         row.innerHTML = `
-            <td><input type="checkbox" class="select-product-checkbox" data-id="${p.id}" ${checked}></td>
+            <td><input type="checkbox" class="select-product-checkbox" data-id="${parseInt(p.id, 10)}" ${checked}></td>
             <td>${p.image_url ? `<img src="${p.image_url}" class="product-img">` : ''}</td>
             <td><a href="${p.url}" target="_blank">${p.title}</a></td>
             <td>${p.price || ''}</td>
@@ -104,7 +104,7 @@ function renderTable() {
             <td>${p.alcohol_type || ''}</td>
             <td><span class="date-cell">${p.published_at || ''}</span></td>
             <td><span class="date-cell">${p.updated_at || ''}</span></td>
-            <td><input type="checkbox" class="ignore-notifications-toggle" data-id="${p.id}" ${p.ignore_notifications ? 'checked' : ''}></td>
+            <td><input type="checkbox" class="ignore-notifications-toggle" data-id="${parseInt(p.id, 10)}" ${p.ignore_notifications ? 'checked' : ''}></td>
             <td>
                 <button class="expand-btn" data-idx="${i}" style="background:none;border:none;font-size:18px;cursor:pointer;">▶</button>
                 <button class="edit-btn" data-id="${p.id}" style="margin-left:8px;padding:4px 10px;font-size:14px;background:#2563eb;color:#fff;border:none;border-radius:4px;">Edit</button>
@@ -123,7 +123,7 @@ function renderTable() {
                 <b>Became Available At:</b> <span class="date-cell">${p.became_available_at || ''}</span><br>
                 <b>Became Unavailable At:</b> <span class="date-cell">${p.became_unavailable_at || ''}</span><br>
                 <b>Date Added:</b> <span class="date-cell">${p.date_added || ''}</span><br>
-                <b>Ignore Notifications:</b> <input type="checkbox" class="ignore-notifications-toggle" data-id="${p.id}" ${p.ignore_notifications ? 'checked' : ''}> <span style="font-size:13px;color:#888;">(Suppress webhook alerts for this product)</span>
+                <b>Ignore Notifications:</b> <input type="checkbox" class="ignore-notifications-toggle" data-id="${parseInt(p.id, 10)}" ${p.ignore_notifications ? 'checked' : ''}> <span style="font-size:13px;color:#888;">(Suppress webhook alerts for this product)</span>
             </div>
         </td>`;
         body.appendChild(details);
@@ -145,13 +145,15 @@ function renderTable() {
     // Add ignore_notifications toggle logic
     document.querySelectorAll('.ignore-notifications-toggle').forEach(toggle => {
         toggle.onchange = async function() {
-            const id = toggle.getAttribute('data-id');
+            const id = parseInt(toggle.getAttribute('data-id'), 10);
             const checked = toggle.checked ? 1 : 0;
+            const product = products.find(p => parseInt(p.id, 10) === id);
+            const input_url = product && product.input_url ? product.input_url : '';
             try {
                 const res = await fetch(`/api/products/${id}/ignore`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ignore_notifications: checked })
+                    body: JSON.stringify({ ignore_notifications: checked, input_url })
                 });
                 if (!res.ok) throw new Error('Failed to update ignore_notifications');
                 // Update local data
@@ -165,8 +167,8 @@ function renderTable() {
     // Add edit modal logic
     document.querySelectorAll('.edit-btn').forEach(btn => {
         btn.onclick = function() {
-            const id = btn.getAttribute('data-id');
-            const product = products.find(p => p.id == id);
+            const id = parseInt(btn.getAttribute('data-id'), 10);
+            const product = products.find(p => parseInt(p.id, 10) === id);
             if (!product) return;
             document.getElementById('editProductId').value = product.id;
             document.getElementById('editProductTitle').value = product.title || '';
@@ -175,6 +177,7 @@ function renderTable() {
             document.getElementById('editProductVendor').value = product.vendor || '';
             populateEditAlcoholTypeDropdown(product.alcohol_type || 'unwanted');
             document.getElementById('editProductIgnoreNotifications').checked = !!product.ignore_notifications;
+            document.getElementById('editProductInputUrl').value = product.input_url || '';
             document.getElementById('editProductModal').style.display = 'block';
         };
     });
@@ -193,11 +196,12 @@ function renderTable() {
         const vendor = document.getElementById('editProductVendor').value;
         const alcohol_type = document.getElementById('editProductAlcoholType').value;
         const ignore_notifications = document.getElementById('editProductIgnoreNotifications').checked ? 1 : 0;
+        const input_url = document.getElementById('editProductInputUrl').value;
         try {
             const res = await fetch(`/products/${id}/edit`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `title=${encodeURIComponent(title)}&price=${encodeURIComponent(price)}&available=${encodeURIComponent(available)}&vendor=${encodeURIComponent(vendor)}&alcohol_type=${encodeURIComponent(alcohol_type)}&ignore_notifications=${encodeURIComponent(ignore_notifications)}`
+                body: `title=${encodeURIComponent(title)}&price=${encodeURIComponent(price)}&available=${encodeURIComponent(available)}&vendor=${encodeURIComponent(vendor)}&alcohol_type=${encodeURIComponent(alcohol_type)}&ignore_notifications=${encodeURIComponent(ignore_notifications)}&input_url=${encodeURIComponent(input_url)}`
             });
             if (!res.ok) throw new Error('Failed to update product');
             document.getElementById('editProductModal').style.display = 'none';
@@ -242,9 +246,18 @@ function renderPagination() {
         el.textContent = label || p;
         if (p !== currentPage) el.href = '#';
         if (p === currentPage) el.className = 'active';
-        el.onclick = e => { e.preventDefault(); currentPage = p; fetchProducts(p); };
+        el.onclick = e => {
+            e.preventDefault();
+            if (p !== currentPage) {
+                currentPage = p;
+                renderTable();
+                renderPagination();
+                saveState();
+            }
+        };
         return el;
     }
+    if (totalPages <= 1) return; // Hide pagination if only one page
     if (currentPage > 1) {
         pagDiv.appendChild(pageBtn(1, '« First'));
         pagDiv.appendChild(pageBtn(currentPage-1, '‹ Prev'));
@@ -275,6 +288,7 @@ function sortTable(key) {
         return 0;
     });
     renderTable();
+    renderPagination(); // Ensure pagination is updated after sorting
 }
 
 function filterTable() {
@@ -298,6 +312,7 @@ function filterTable() {
     });
     sortTable(sortKey);
     renderStats();
+    renderPagination(); // Ensure pagination is updated after filtering
 }
 
 function resetFilters() {
@@ -371,7 +386,15 @@ function saveProductsToCache() {
         timestamp: Date.now(),
         version: 2
     };
-    localStorage.setItem(PRODUCTS_KEY, JSON.stringify(cache));
+    try {
+        localStorage.setItem(PRODUCTS_KEY, JSON.stringify(cache));
+    } catch (e) {
+        if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
+            console.warn('LocalStorage quota exceeded, skipping product cache.');
+        } else {
+            throw e;
+        }
+    }
 }
 
 function loadProductsFromCache() {
@@ -396,6 +419,7 @@ function loadProductsFromCache() {
 const origSortTable = sortTable;
 sortTable = function(key) {
     origSortTable(key);
+    renderPagination();
     saveState();
 };
 
@@ -432,6 +456,7 @@ document.addEventListener('DOMContentLoaded', function() {
         origFetchProducts(currentPage);
         loadState();
         renderStats();
+        renderPagination(); // Ensure pagination is rendered on first load
     }
 });
 document.getElementById('searchInput').addEventListener('input', filterTable);
@@ -444,6 +469,7 @@ document.getElementById('showUnwantedCheckbox').addEventListener('change', filte
 window.onload = function() {
     fetchProducts(currentPage);
     renderStats();
+    renderPagination(); // Ensure pagination is rendered on window load
 };
 document.getElementById('refreshBtn').onclick = async function() {
     products = [];
@@ -560,7 +586,7 @@ document.getElementById('editProductAlcoholType').addEventListener('change', fun
 document.getElementById('selectAllCheckbox').onchange = function() {
     const start = (currentPage - 1) * perPage;
     const end = Math.min(start + perPage, filtered.length);
-    const allVisibleIds = filtered.slice(start, end).map(p => p.id);
+    const allVisibleIds = filtered.slice(start, end).map(p => parseInt(p.id, 10));
     if (this.checked) {
         allVisibleIds.forEach(id => selectedProductIds.add(id));
     } else {
@@ -572,16 +598,18 @@ document.getElementById('selectAllCheckbox').onchange = function() {
 // --- Bulk action handlers ---
 document.getElementById('bulkIgnoreBtn').onclick = async function() {
     for (const id of selectedProductIds) {
+        const product = products.find(p => parseInt(p.id, 10) === id);
+        const input_url = product && product.input_url ? product.input_url : '';
         // Update locally
         [products, filtered].forEach(arr => {
-            const idx = arr.findIndex(p => p.id == id);
+            const idx = arr.findIndex(p => parseInt(p.id, 10) === id);
             if (idx !== -1) arr[idx].ignore_notifications = 1;
         });
         // Update backend
         await fetch(`/api/products/${id}/ignore`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ignore_notifications: 1 })
+            body: JSON.stringify({ ignore_notifications: 1, input_url })
         });
     }
     renderTable();
@@ -589,9 +617,11 @@ document.getElementById('bulkIgnoreBtn').onclick = async function() {
 };
 document.getElementById('bulkUnwantedBtn').onclick = async function() {
     for (const id of selectedProductIds) {
+        const product = products.find(p => parseInt(p.id, 10) === id);
+        const input_url = product && product.input_url ? product.input_url : '';
         // Update locally
         [products, filtered].forEach(arr => {
-            const idx = arr.findIndex(p => p.id == id);
+            const idx = arr.findIndex(p => parseInt(p.id, 10) === id);
             if (idx !== -1) {
                 arr[idx].alcohol_type = 'unwanted';
                 arr[idx].ignore_notifications = 1;
@@ -601,7 +631,7 @@ document.getElementById('bulkUnwantedBtn').onclick = async function() {
         await fetch(`/products/${id}/edit`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: `alcohol_type=unwanted&ignore_notifications=1`
+            body: `alcohol_type=unwanted&ignore_notifications=1&input_url=${encodeURIComponent(input_url)}`
         });
     }
     renderTable();
@@ -623,19 +653,23 @@ function updateBulkActionsBar() {
     }
     label.textContent = selectedProductIds.size > 0 ? `${selectedProductIds.size} product${selectedProductIds.size === 1 ? '' : 's'} selected` : '';
     label.style.display = selectedProductIds.size > 0 ? '' : 'none';
+    // Also update selectAllCheckbox state
+    const start = (currentPage - 1) * perPage;
+    const end = Math.min(start + perPage, filtered.length);
+    const allVisibleIds = filtered.slice(start, end).map(p => parseInt(p.id, 10));
+    const allChecked = allVisibleIds.length > 0 && allVisibleIds.every(id => selectedProductIds.has(id));
+    document.getElementById('selectAllCheckbox').checked = allChecked;
 }
 
 document.getElementById('productsBody').addEventListener('change', function(event) {
     if (event.target.classList.contains('select-product-checkbox')) {
-        const id = event.target.getAttribute('data-id');
-        if (event.target.checked) selectedProductIds.add(id);
-        else selectedProductIds.delete(id);
-        updateBulkActionsBar();
-        // Update selectAllCheckbox state
-        const start = (currentPage - 1) * perPage;
-        const end = Math.min(start + perPage, filtered.length);
-        const allVisibleIds = filtered.slice(start, end).map(p => p.id);
-        const allChecked = allVisibleIds.every(id => selectedProductIds.has(id));
-        document.getElementById('selectAllCheckbox').checked = allChecked;
+        const id = parseInt(event.target.getAttribute('data-id'), 10);
+        if (event.target.checked) {
+            selectedProductIds.add(id);
+        }
+        else {
+            selectedProductIds.delete(id);
+        }
+        updateBulkActionsBar(); // Always update label and select all state
     }
 });
