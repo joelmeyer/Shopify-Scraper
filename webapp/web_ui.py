@@ -63,8 +63,11 @@ def api_products():
 
 @app.route('/api/products/<int:product_id>', methods=['GET'])
 def get_product(product_id):
+    input_url = request.args.get('input_url')
+    if not input_url:
+        abort(400, 'Missing input_url')
     conn = get_db_connection()
-    p = conn.execute('SELECT * FROM products WHERE id = ?', (product_id,)).fetchone()
+    p = conn.execute('SELECT * FROM products WHERE id = ? AND input_url = ?', (product_id, input_url)).fetchone()
     conn.close()
     if p is None:
         abort(404)
@@ -170,18 +173,24 @@ def view_logs():
 def set_ignore_notifications(product_id):
     data = request.get_json()
     value = int(data.get('ignore_notifications', 0))
+    input_url = data.get('input_url')
+    if not input_url:
+        abort(400, 'Missing input_url')
     conn = get_db_connection()
-    cur = conn.execute('UPDATE products SET ignore_notifications = ? WHERE id = ?', (value, product_id))
+    cur = conn.execute('UPDATE products SET ignore_notifications = ? WHERE id = ? AND input_url = ?', (value, product_id, input_url))
     conn.commit()
     conn.close()
     if cur.rowcount == 0:
         abort(404, 'Product not found')
-    return jsonify({'message': 'ignore_notifications updated', 'id': product_id, 'ignore_notifications': value})
+    return jsonify({'message': 'ignore_notifications updated', 'id': product_id, 'input_url': input_url, 'ignore_notifications': value})
 
 @app.route('/products/<int:product_id>/edit', methods=['POST', 'PUT'])
 def edit_product(product_id):
+    input_url = request.form.get('input_url') or request.args.get('input_url')
+    if not input_url:
+        abort(400, 'Missing input_url')
     conn = get_db_connection()
-    p = conn.execute('SELECT * FROM products WHERE id = ?', (product_id,)).fetchone()
+    p = conn.execute('SELECT * FROM products WHERE id = ? AND input_url = ?', (product_id, input_url)).fetchone()
     if not p:
         conn.close()
         abort(404)
@@ -202,13 +211,25 @@ def edit_product(product_id):
             vendor = request.form.get('vendor', p['vendor'])
             alcohol_type = request.form.get('alcohol_type', p['alcohol_type'])
             ignore_notifications = int(request.form.get('ignore_notifications', p['ignore_notifications']))
-        conn.execute('UPDATE products SET title = ?, price = ?, available = ?, vendor = ?, alcohol_type = ?, ignore_notifications = ? WHERE id = ?',
-            (title, price, available, vendor, alcohol_type, ignore_notifications, product_id))
+        conn.execute('UPDATE products SET title = ?, price = ?, available = ?, vendor = ?, alcohol_type = ?, ignore_notifications = ? WHERE id = ? AND input_url = ?',
+            (title, price, available, vendor, alcohol_type, ignore_notifications, product_id, input_url))
         conn.commit()
         conn.close()
-        return jsonify({'message': 'Product updated', 'id': product_id})
+        return jsonify({'message': 'Product updated', 'id': product_id, 'input_url': input_url})
     conn.close()
     abort(405)
+
+@app.route('/products/<int:product_id>/ignore', methods=['GET'])
+def ignore_product(product_id):
+    input_url = request.args.get('input_url')
+    if not input_url:
+        abort(400, 'Missing input_url')
+    conn = get_db_connection()
+    cur = conn.execute('UPDATE products SET ignore_notifications = 1 WHERE id = ? AND input_url = ?', (product_id, input_url))
+    conn.commit()
+    conn.close()
+    flash('Product ignored (notifications suppressed).', 'success')
+    return redirect(url_for('all_products'))
 
 if __name__ == '__main__':
     app.run(debug=True)
